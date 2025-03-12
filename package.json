@@ -2,19 +2,14 @@
   "name": "destiny-diagnosis-app",
   "version": "1.0.0",
   "description": "前世診断アプリ - ChatGPT APIを使用した運命診断",
-  "main": "app.js",
   "scripts": {
-    "start": "node app.js",
-    "dev": "nodemon app.js"
+    "dev": "netlify dev"
   },
   "dependencies": {
-    "axios": "^1.6.0",
-    "body-parser": "^1.20.2",
-    "dotenv": "^16.3.1",
-    "express": "^4.18.2",
+    "openai": "^3.2.1",
     "uuid": "^9.0.1"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "netlify-cli": "^15.0.0"
   }
 }
