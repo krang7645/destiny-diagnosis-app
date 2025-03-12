@@ -117,59 +117,38 @@ ${destinyData}
     };
 
     // 非同期処理の開始
-    getOpenAIResponse().then(content => {
-      // 結果ID
-      const resultId = Date.now().toString();
+    const content = await getOpenAIResponse();
+    // 結果ID
+    const resultId = Date.now().toString();
 
-      // ステージに応じた結果を返す
-      if (stage === 'destiny' || !stage) {
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({
-            stage: 'destiny',
-            result: content,
-            resultId
-          }),
-        };
-      } else if (stage === 'pastlife') {
-        // 前世データを解析して構造化
-        const reincarnations = extractReincarnations(content);
-
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({
-            stage: 'pastlife',
-            reincarnations,
-            resultId
-          }),
-        };
-      }
-    }).catch(error => {
-      console.error("エラー:", error);
+    // ステージに応じた結果を返す
+    if (stage === 'destiny' || !stage) {
       return {
-        statusCode: 500,
+        statusCode: 200,
         headers,
         body: JSON.stringify({
-          error: "診断処理中にエラーが発生しました",
-          message: error.message
+          stage: 'destiny',
+          result: content,
+          resultId
         }),
       };
-    });
+    } else if (stage === 'pastlife') {
+      // 前世データを解析して構造化
+      const reincarnations = extractReincarnations(content);
 
-    // 処理中のメッセージを即座に返す
-    return {
-      statusCode: 202,
-      headers,
-      body: JSON.stringify({
-        message: "診断を処理中です。結果が準備でき次第、通知されます。"
-      }),
-    };
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          stage: 'pastlife',
+          reincarnations,
+          resultId
+        }),
+      };
+    }
 
   } catch (error) {
     console.error("エラー:", error);
-
     return {
       statusCode: 500,
       headers,
