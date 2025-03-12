@@ -1,715 +1,249 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>運命診断アプリ - あなたの前世を探る</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap');
+const { Configuration, OpenAIApi } = require("openai");
 
-        :root {
-            --primary-color: #6a4bc4;
-            --primary-dark: #5035a5;
-            --secondary-color: #ffd166;
-            --text-color: #333;
-            --bg-color: #f5f5f5;
-            --card-color: #fff;
-            --accent-color: #ef476f;
+exports.handler = async function(event, context) {
+  // CORSヘッダーの設定
+  const headers = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Content-Type": "application/json"
+  };
+
+  // OPTIONSリクエスト（プリフライトリクエスト）への対応
+  if (event.httpMethod === "OPTIONS") {
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({ message: "Successful preflight call" }),
+    };
+  }
+
+  // POSTリクエスト以外は拒否
+  if (event.httpMethod !== "POST") {
+    return {
+      statusCode: 405,
+      headers,
+      body: JSON.stringify({ error: "Method Not Allowed" }),
+    };
+  }
+
+  try {
+    // リクエストボディからデータを取得
+    const data = JSON.parse(event.body);
+    const { name, birthdate, mbti } = data;
+
+    // バリデーション
+    if (!name || !birthdate || !mbti) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: "必須パラメータが不足しています" }),
+      };
+    }
+
+    // OpenAI APIの設定 (v3系の構文)
+    const configuration = new Configuration({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+
+    // キーが設定されていない場合のエラーハンドリング
+    if (!process.env.OPENAI_API_KEY) {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: "OpenAI APIキーが設定されていません" }),
+      };
+    }
+
+    const openai = new OpenAIApi(configuration);
+
+    // プロンプトを簡素化して応答速度を上げる
+    const prompt = `
+以下の情報から運命診断をJSONで返してください。
+名前: ${name}
+生年月日: ${birthdate}
+MBTI: ${mbti}
+
+出力形式:
+{
+  "destiny": "天命の説明（1段落）",
+  "reincarnations": [
+    {"name": "人物1名前", "years": "生没年", "reasons": ["理由1", "理由2", "理由3", "理由4"], "conclusion": "結論"},
+    {"name": "人物2名前", "years": "生没年", "reasons": ["理由1", "理由2", "理由3", "理由4"], "conclusion": "結論"},
+    {"name": "人物3名前", "years": "生没年", "reasons": ["理由1", "理由2", "理由3", "理由4"], "conclusion": "結論"}
+  ]
+}`;
+
+    try {
+      // OpenAI API呼び出し (v3系の構文)
+      const response = await openai.createChatCompletion({
+        model: "gpt-3.5-turbo",
+        messages: [
+          { role: "system", content: "あなたは運命診断の専門家です。回答は必ず指定されたJSON形式で簡潔に返してください。" },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.5,
+        max_tokens: 800
+      });
+
+      // 応答テキストを取得
+      const content = response.data.choices[0].message.content;
+
+      // JSONを解析
+      try {
+        const resultData = JSON.parse(content);
+
+        // 結果ID
+        const resultId = Date.now().toString();
+
+        // 成功レスポンス
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            ...resultData,
+            resultId
+          }),
+        };
+      } catch (jsonError) {
+        console.error("JSONパースエラー:", jsonError);
+
+        // JSONパースエラー時はテキストからJSONを抽出
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+
+        if (jsonMatch) {
+          try {
+            const extractedData = JSON.parse(jsonMatch[0]);
+            return {
+              statusCode: 200,
+              headers,
+              body: JSON.stringify({
+                ...extractedData,
+                resultId: Date.now().toString()
+              }),
+            };
+          } catch (e) {
+            throw new Error("JSONの抽出とパースに失敗しました");
+          }
+        } else {
+          throw new Error("APIレスポンスからJSONを見つけられませんでした");
         }
+      }
+    } catch (apiError) {
+      console.error("API呼び出しエラー:", apiError);
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
+      // バックアップロジック - MBTIタイプに基づいた代替レスポンスを生成
+      const mbtiTraits = {
+        'INTJ': '論理的思考と長期的なビジョンで世界を変革する',
+        'INTP': '知的探求と理論の構築によって新たな知見をもたらす',
+        'ENTJ': 'リーダーシップと戦略的思考で組織や社会を導く',
+        'ENTP': '革新的なアイデアと議論によって既存の枠組みを壊す',
+        'INFJ': '深い洞察力と誠実さで人々の心に触れ、社会に貢献する',
+        'INFP': '理想と創造性によって世界に美と調和をもたらす',
+        'ENFJ': '人々の成長を促し、コミュニティの絆を強める',
+        'ENFP': '情熱と創造性で人々を鼓舞し、可能性を広げる',
+        'ISTJ': '秩序と責任感によって社会の安定を支える',
+        'ISFJ': '思いやりと献身によって周囲の人々を支え守る',
+        'ESTJ': '効率性と実行力で組織を導き、目標を達成する',
+        'ESFJ': '調和と協力を促進し、コミュニティの結束を高める',
+        'ISTP': '実践的な問題解決と適応力で状況を打開する',
+        'ISFP': '感性と自由な表現によって人々の心に美を届ける',
+        'ESTP': '行動力と機転で困難を乗り越え、人生を楽しむ',
+        'ESFP': '活力と魅力で周囲を明るくし、人々に喜びをもたらす'
+      };
+
+      // 星座の計算
+      const birthParts = birthdate.match(/(\d{4})年(\d{2})月(\d{2})日/);
+      let zodiac = '';
+      if (birthParts) {
+        const month = parseInt(birthParts[2]);
+        const day = parseInt(birthParts[3]);
+
+        if ((month === 3 && day >= 21) || (month === 4 && day <= 19)) zodiac = '牡羊座';
+        else if ((month === 4 && day >= 20) || (month === 5 && day <= 20)) zodiac = '牡牛座';
+        else if ((month === 5 && day >= 21) || (month === 6 && day <= 21)) zodiac = '双子座';
+        else if ((month === 6 && day >= 22) || (month === 7 && day <= 22)) zodiac = '蟹座';
+        else if ((month === 7 && day >= 23) || (month === 8 && day <= 22)) zodiac = '獅子座';
+        else if ((month === 8 && day >= 23) || (month === 9 && day <= 22)) zodiac = '乙女座';
+        else if ((month === 9 && day >= 23) || (month === 10 && day <= 23)) zodiac = '天秤座';
+        else if ((month === 10 && day >= 24) || (month === 11 && day <= 22)) zodiac = '蠍座';
+        else if ((month === 11 && day >= 23) || (month === 12 && day <= 21)) zodiac = '射手座';
+        else if ((month === 12 && day >= 22) || (month === 1 && day <= 19)) zodiac = '山羊座';
+        else if ((month === 1 && day >= 20) || (month === 2 && day <= 18)) zodiac = '水瓶座';
+        else zodiac = '魚座';
+      } else {
+        zodiac = '不明な星座';
+      }
+
+      // 字画の簡易計算
+      const strokeCount = name.length * 7 + 2;
+
+      // 汎用的な歴史上の人物リスト
+      const genericFigures = [
+        {
+          name: "レオナルド・ダ・ヴィンチ",
+          years: "1452-1519",
+          reasons: [
+            "**多才な創造性**：芸術から科学まで幅広い分野で才能を発揮",
+            "**先進的な思考**：時代を数百年先取りした発明と考察",
+            "**観察力と分析力**：物事の本質を見抜く鋭い目",
+            "**完成よりも探求を重視**：常に新しいことに挑戦し続けた姿勢"
+          ],
+          conclusion: "→ **「好奇心と創造性」**においてあなたの魂と通じるものがあります！"
+        },
+        {
+          name: "クレオパトラ",
+          years: "紀元前69-30",
+          reasons: [
+            "**卓越した知性と戦略**：複数の言語を操り、政治的手腕を発揮",
+            "**カリスマ性**：強大な帝国の指導者たちを魅了する魅力",
+            "**芸術と科学への理解**：文化的教養の高さ",
+            "**強い意志と決断力**：困難な状況下での冷静な判断"
+          ],
+          conclusion: "→ **「知性と魅力を武器に歴史を動かした」**点であなたとの共通点が見られます！"
+        },
+        {
+          name: "ガンジー",
+          years: "1869-1948",
+          reasons: [
+            "**非暴力の哲学**：平和的な方法で大きな変革を成し遂げた",
+            "**揺るぎない信念**：困難に直面しても自分の価値観を貫いた",
+            "**シンプルな生活様式**：物質的なものよりも精神的な豊かさを重視",
+            "**包容力**：異なる意見や背景を持つ人々を尊重する姿勢"
+          ],
+          conclusion: "→ **「内なる強さと信念で世界に影響を与えた」**点があなたの魂に共鳴しています！"
         }
-
-        body {
-            font-family: 'Noto Sans JP', sans-serif;
-            line-height: 1.6;
-            color: var(--text-color);
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: var(--bg-color);
-            background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1IiBoZWlnaHQ9IjUiPgo8cmVjdCB3aWR0aD0iNSIgaGVpZ2h0PSI1IiBmaWxsPSIjZmZmIj48L3JlY3Q+CjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9IiNmMGYwZjAiPjwvcmVjdD4KPC9zdmc+');
-        }
-
-        h1, h2, h3 {
-            color: var(--primary-color);
-            font-weight: 700;
-        }
-
-        h1 {
-            text-align: center;
-            margin-bottom: 20px;
-            font-size: 2.2em;
-            position: relative;
-            padding-bottom: 15px;
-        }
-
-        h1::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 60px;
-            height: 3px;
-            background-color: var(--secondary-color);
-            border-radius: 3px;
-        }
-
-        .subtitle {
-            text-align: center;
-            font-size: 1.2em;
-            margin-bottom: 30px;
-            color: #666;
-        }
-
-        .container {
-            background: var(--card-color);
-            border-radius: 16px;
-            padding: 30px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
-            margin-bottom: 30px;
-            transition: transform 0.3s, box-shadow 0.3s;
-            overflow: hidden;
-        }
-
-        .container:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 25px rgba(106, 75, 196, 0.1);
-        }
-
-        label {
-            display: block;
-            margin-top: 20px;
-            margin-bottom: 5px;
-            font-weight: 500;
-            color: var(--primary-color);
-        }
-
-        input, select {
-            width: 100%;
-            padding: 12px 15px;
-            margin-top: 5px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-size: 16px;
-            background-color: #f9f9f9;
-            transition: border-color 0.3s, box-shadow 0.3s;
-        }
-
-        input:focus, select:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(106, 75, 196, 0.1);
-        }
-
-        button {
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            padding: 14px 20px;
-            margin-top: 25px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 500;
-            width: 100%;
-            transition: background-color 0.3s, transform 0.3s;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        button:hover {
-            background-color: var(--primary-dark);
-            transform: translateY(-2px);
-        }
-
-        button:active {
-            transform: translateY(0);
-        }
-
-        /* 宇宙を演出するローディングアニメーション */
-        .loading {
-            text-align: center;
-            margin: 20px 0;
-            display: none;
-            position: relative;
-            height: 300px;
-            overflow: hidden;
-            border-radius: 12px;
-            background: linear-gradient(135deg, #000000, #1a0033);
-        }
-
-        .loading::before {
-            content: '';
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            top: 0;
-            left: 0;
-            background-image:
-                radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 2px),
-                radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 1px),
-                radial-gradient(white, rgba(255,255,255,.1) 2px, transparent 2px),
-                radial-gradient(rgba(255,255,255,.4), rgba(255,255,255,.1) 2px, transparent 2px);
-            background-size: 550px 550px, 350px 350px, 250px 250px, 150px 150px;
-            background-position: 0 0, 40px 60px, 130px 270px, 70px 100px;
-            animation: stars 5s linear infinite;
-        }
-
-        @keyframes stars {
-            0% {
-                transform: rotate(0deg) scale(1.0);
-                opacity: 0.8;
-            }
-            50% {
-                opacity: 1;
-            }
-            100% {
-                transform: rotate(360deg) scale(1.5);
-                opacity: 0.8;
-            }
-        }
-
-        .cosmic-body {
-            position: absolute;
-            width: 120px;
-            height: 120px;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            border-radius: 50%;
-            background: radial-gradient(circle at 30% 30%, #fdf6c5, #ffcb05 40%, #ff5e00 70%, #6a4bc4);
-            box-shadow: 0 0 60px 30px rgba(255, 203, 5, 0.3),
-                        0 0 100px 60px rgba(255, 94, 0, 0.3),
-                        0 0 140px 90px rgba(106, 75, 196, 0.3);
-            animation: pulse 3s ease-in-out infinite;
-        }
-
-        .orbit {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-        }
-
-        .orbit:nth-child(1) {
-            width: 240px;
-            height: 240px;
-            animation: rotate 10s linear infinite;
-        }
-
-        .orbit:nth-child(2) {
-            width: 200px;
-            height: 200px;
-            animation: rotate 15s linear infinite reverse;
-        }
-
-        .orbit:nth-child(3) {
-            width: 160px;
-            height: 160px;
-            animation: rotate 20s linear infinite;
-        }
-
-        .satellite {
-            position: absolute;
-            width: 15px;
-            height: 15px;
-            border-radius: 50%;
-            background: white;
-            box-shadow: 0 0 10px 2px rgba(255, 255, 255, 0.6);
-        }
-
-        .orbit:nth-child(1) .satellite {
-            top: 0;
-            left: 50%;
-            transform: translate(-50%, -50%);
-        }
-
-        .orbit:nth-child(2) .satellite {
-            top: 50%;
-            right: 0;
-            transform: translate(50%, -50%);
-        }
-
-        .orbit:nth-child(3) .satellite {
-            bottom: 0;
-            left: 50%;
-            transform: translate(-50%, 50%);
-        }
-
-        @keyframes rotate {
-            from { transform: translate(-50%, -50%) rotate(0deg); }
-            to { transform: translate(-50%, -50%) rotate(360deg); }
-        }
-
-        @keyframes pulse {
-            0% { transform: translate(-50%, -50%) scale(1); }
-            50% { transform: translate(-50%, -50%) scale(1.05); }
-            100% { transform: translate(-50%, -50%) scale(1); }
-        }
-
-        .loading-text {
-            position: absolute;
-            bottom: 30px;
-            left: 0;
-            right: 0;
-            color: white;
-            font-size: 1.2em;
-            font-weight: 500;
-            letter-spacing: 1px;
-            text-shadow: 0 0 10px rgba(255, 255, 255, 0.7);
-            animation: pulse-text 2s ease-in-out infinite;
-        }
-
-        @keyframes pulse-text {
-            0% { opacity: 0.7; }
-            50% { opacity: 1; }
-            100% { opacity: 0.7; }
-        }
-
-        .result {
-            margin-top: 30px;
-            padding: 25px;
-            background-color: #f9f9f9;
-            border-left: 5px solid var(--primary-color);
-            border-radius: 12px;
-            display: none;
-            animation: fadeIn 1s ease-out;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .result h2 {
-            color: var(--primary-color);
-            margin-top: 0;
-            margin-bottom: 20px;
-            font-size: 1.6em;
-            position: relative;
-            padding-bottom: 10px;
-        }
-
-        .result h2::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 40px;
-            height: 3px;
-            background-color: var(--secondary-color);
-            border-radius: 3px;
-        }
-
-        .result-item {
-            margin-bottom: 30px;
-            padding: 20px;
-            background-color: white;
-            border-radius: 10px;
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
-            transition: transform 0.3s;
-        }
-
-        .result-item:hover {
-            transform: translateY(-5px);
-        }
-
-        .person-name {
-            font-weight: 700;
-            font-size: 1.3em;
-            color: var(--primary-color);
-            margin-bottom: 10px;
-            border-bottom: 1px dashed #ddd;
-            padding-bottom: 8px;
-        }
-
-        .reason-list {
-            margin: 15px 0;
-            padding-left: 20px;
-        }
-
-        .reason-list li {
-            margin-bottom: 8px;
-            line-height: 1.5;
-        }
-
-        .error {
-            color: var(--accent-color);
-            text-align: center;
-            display: none;
-            padding: 20px;
-            background-color: #fff8f8;
-            border-radius: 8px;
-            border-left: 5px solid var(--accent-color);
-            margin-top: 20px;
-        }
-
-        footer {
-            margin-top: 40px;
-            text-align: center;
-            font-size: 0.9em;
-            color: #7f8c8d;
-            padding: 20px 0;
-            border-top: 1px solid #eee;
-        }
-
-        .share-section {
-            margin-top: 30px;
-            text-align: center;
-            display: none;
-            padding: 20px;
-            background-color: #f5f9ff;
-            border-radius: 12px;
-        }
-
-        .share-section h3 {
-            margin-bottom: 15px;
-            color: var(--primary-color);
-        }
-
-        .share-buttons {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            margin-top: 15px;
-        }
-
-        .share-button {
-            background-color: #2ecc71;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 16px;
-            margin: 0;
-            transition: background-color 0.3s, transform 0.3s;
-            width: auto;
-            display: inline-flex;
-            align-items: center;
-        }
-
-        .share-button svg {
-            margin-right: 8px;
-        }
-
-        .share-button.twitter {
-            background-color: #1da1f2;
-        }
-
-        .share-button.line {
-            background-color: #06c755;
-        }
-
-        .share-button.copy {
-            background-color: #6c757d;
-        }
-
-        .share-button:hover {
-            opacity: 0.9;
-            transform: translateY(-2px);
-        }
-
-        .restart-button {
-            background-color: #95a5a6;
-            margin-top: 20px;
-        }
-
-        .restart-button:hover {
-            background-color: #7f8c8d;
-        }
-
-        /* 星のきらめき効果 */
-        .star {
-            position: fixed;
-            width: 2px;
-            height: 2px;
-            background-color: white;
-            border-radius: 50%;
-            animation: twinkle 5s infinite;
-            z-index: -1;
-        }
-
-        @keyframes twinkle {
-            0% { opacity: 0; }
-            50% { opacity: 1; }
-            100% { opacity: 0; }
-        }
-
-        /* レスポンシブデザイン */
-        @media (max-width: 600px) {
-            .container {
-                padding: 20px;
-            }
-
-            h1 {
-                font-size: 1.8em;
-            }
-
-            .subtitle {
-                font-size: 1em;
-            }
-
-            .share-buttons {
-                flex-direction: column;
-                align-items: center;
-            }
-
-            .share-button {
-                width: 80%;
-                margin-bottom: 10px;
-            }
-        }
-    </style>
-</head>
-<body>
-    <h1>運命診断アプリ</h1>
-    <div class="subtitle">あなたの前世と天命を星々が教えてくれる</div>
-
-    <div class="container">
-        <div id="form-section">
-            <label for="name">名前（漢字・ひらがな）:</label>
-            <input type="text" id="name" placeholder="あなたのお名前を入力" required>
-
-            <label for="birthdate">生年月日:</label>
-            <input type="date" id="birthdate" required>
-
-            <label for="mbti">MBTIタイプ:</label>
-            <select id="mbti" required>
-                <option value="">選択してください</option>
-                <option value="INTJ">INTJ - 建築家</option>
-                <option value="INTP">INTP - 論理学者</option>
-                <option value="ENTJ">ENTJ - 指揮官</option>
-                <option value="ENTP">ENTP - 討論者</option>
-                <option value="INFJ">INFJ - 提唱者</option>
-                <option value="INFP">INFP - 仲介者</option>
-                <option value="ENFJ">ENFJ - 主人公</option>
-                <option value="ENFP">ENFP - 広報運動家</option>
-                <option value="ISTJ">ISTJ - 管理者</option>
-                <option value="ISFJ">ISFJ - 擁護者</option>
-                <option value="ESTJ">ESTJ - 幹部</option>
-                <option value="ESFJ">ESFJ - 領事官</option>
-                <option value="ISTP">ISTP - 巨匠</option>
-                <option value="ISFP">ISFP - 冒険家</option>
-                <option value="ESTP">ESTP - 起業家</option>
-                <option value="ESFP">ESFP - エンターテイナー</option>
-            </select>
-
-            <button id="analyze">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><circle cx="12" cy="12" r="10"></circle><path d="M16.2 7.8l-2 6.3-6.4 2.1 2-6.3z"></path></svg>
-                運命を診断する
-            </button>
-        </div>
-
-        <div class="loading" id="loading">
-            <div class="orbit"><div class="satellite"></div></div>
-            <div class="orbit"><div class="satellite"></div></div>
-            <div class="orbit"><div class="satellite"></div></div>
-            <div class="cosmic-body"></div>
-            <div class="loading-text">宇宙の彼方からあなたの運命を読み解いています...</div>
-        </div>
-
-        <div class="error" id="error">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 10px; vertical-align: middle;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-            エラーが発生しました。しばらくしてからもう一度お試しください。
-        </div>
-
-        <div class="result" id="result">
-            <h2>あなたの天命</h2>
-            <div id="destiny-result"></div>
-
-            <h2 style="margin-top: 30px;">あなたの前世</h2>
-            <p>以下の歴史上の人物の魂があなたに宿っている可能性が高いです：</p>
-            <div id="reincarnation-result"></div>
-
-            <div class="share-section" id="share-section">
-                <h3>結果をシェアする</h3>
-                <p>あなたの運命診断結果を友達と共有しましょう！</p>
-                <div class="share-buttons">
-                    <button class="share-button twitter" id="share-twitter">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z"></path></svg>
-                        Twitter
-                    </button>
-                    <button class="share-button line" id="share-line">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h3m8-4h3a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-3M12 8v8m-4-4h8"></path></svg>
-                        LINE
-                    </button>
-                    <button class="share-button copy" id="copy-url">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                        URLをコピー
-                    </button>
-                </div>
-            </div>
-
-            <button class="restart-button" id="restart">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
-                もう一度診断する
-            </button>
-        </div>
-    </div>
-
-    <footer>
-        <p>© 2025 運命診断アプリ - 星々の導きと魂の記憶</p>
-    </footer>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // 星のきらめき効果を作成
-            for (let i = 0; i < 50; i++) {
-                createStar();
-            }
-
-            // DOM要素
-            const formSection = document.getElementById('form-section');
-            const loadingSection = document.getElementById('loading');
-            const errorSection = document.getElementById('error');
-            const resultSection = document.getElementById('result');
-            const shareSection = document.getElementById('share-section');
-
-            const nameInput = document.getElementById('name');
-            const birthdateInput = document.getElementById('birthdate');
-            const mbtiSelect = document.getElementById('mbti');
-
-            const analyzeButton = document.getElementById('analyze');
-            const restartButton = document.getElementById('restart');
-
-            // 診断実行
-            analyzeButton.addEventListener('click', async function() {
-                // 入力値の取得
-                const name = nameInput.value;
-                const birthdate = birthdateInput.value;
-                const mbti = mbtiSelect.value;
-
-                // バリデーション
-                if (!name || !birthdate || !mbti) {
-                    alert('すべての項目を入力してください');
-                    return;
-                }
-
-                // 日付の整形
-                const date = new Date(birthdate);
-                const formattedDate = `${date.getFullYear()}年${(date.getMonth() + 1).toString().padStart(2, '0')}月${date.getDate().toString().padStart(2, '0')}日`;
-
-                // 読み込み表示
-                formSection.style.display = 'none';
-                loadingSection.style.display = 'block';
-                resultSection.style.display = 'none';
-                errorSection.style.display = 'none';
-
-                try {
-                    // Netlify Function APIリクエスト
-                    const response = await fetch('/api/analyze', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            name: name,
-                            birthdate: formattedDate,
-                            mbti: mbti
-                        })
-                    });
-
-                    // ローディング演出のため少し待機
-                    await new Promise(resolve => setTimeout(resolve, 3000));
-
-                    if (!response.ok) {
-                        throw new Error('API request failed');
-                    }
-
-                    const data = await response.json();
-
-                    if (data.error) {
-                        throw new Error(data.error);
-                    }
-
-                    // 結果の表示
-                    document.getElementById('destiny-result').innerHTML = `<p>${data.destiny}</p>`;
-
-                    let reincarnationHtml = '';
-                    data.reincarnations.forEach((person, index) => {
-                        reincarnationHtml += `
-                            <div class="result-item">
-                                <div class="person-name">${index + 1}. ${person.name}（${person.years}）</div>
-                                <div><strong>あなたとの共通点:</strong></div>
-                                <ul class="reason-list">
-                                    ${person.reasons.map(reason => `<li>${reason}</li>`).join('')}
-                                </ul>
-                                <p>${person.conclusion}</p>
-                            </div>
-                        `;
-                    });
-
-                    document.getElementById('reincarnation-result').innerHTML = reincarnationHtml;
-
-                    // 結果セクションの表示（フェードインアニメーション用に少し遅延）
-                    setTimeout(() => {
-                        loadingSection.style.display = 'none';
-                        resultSection.style.display = 'block';
-                        shareSection.style.display = 'block';
-                    }, 500);
-
-                    // URLパラメータの設定（共有用）
-                    if (data.resultId) {
-                        const shareUrl = `${window.location.origin}${window.location.pathname}?result=${data.resultId}&name=${encodeURIComponent(name)}`;
-                        setupShareButtons(shareUrl, name);
-
-                        // URLを更新（履歴に追加）
-                        const newUrl = `${window.location.pathname}?result=${data.resultId}&name=${encodeURIComponent(name)}`;
-                        window.history.pushState({ path: newUrl }, '', newUrl);
-                    }
-
-                } catch (error) {
-                    console.error('Error:', error);
-                    loadingSection.style.display = 'none';
-                    errorSection.style.display = 'block';
-
-                    // 5秒後にフォームに戻る
-                    setTimeout(() => {
-                        errorSection.style.display = 'none';
-                        formSection.style.display = 'block';
-                    }, 5000);
-                }
-            });
-
-            // やり直しボタン
-            restartButton.addEventListener('click', function() {
-                // フォームをリセット
-                nameInput.value = '';
-                birthdateInput.value = '';
-                mbtiSelect.value = '';
-
-                // 表示切替
-                resultSection.style.display = 'none';
-                formSection.style.display = 'block';
-
-                // URLをリセット
-                window.history.pushState({}, '', window.location.pathname);
-            });
-
-            // シェアボタンの設定
-            function setupShareButtons(shareUrl, name) {
-                // Twitterシェア
-                document.getElementById('share-twitter').addEventListener('click', function() {
-                    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(`私の前世診断結果：${name}の前世を診断しました！`)}&url=${encodeURIComponent(shareUrl)}`;
-                    window.open(twitterUrl, '_blank');
-                });
-
-                // LINEシェア
-                document.getElementById('share-line').addEventListener('click', function() {
-                    const lineUrl = `https://line.me/R/msg/text/?${encodeURIComponent(`私の前世診断結果：${name}の前世を診断しました！ ${shareUrl}`)}`;
-                    window.open(lineUrl, '_blank');
-                });
-
-                // URLコピー
-                document.getElementById('copy-url').addEventListener('click', function() {
-                    navigator.clipboard.writeText(shareUrl).then(() => {
-                        alert
+      ];
+
+      // 天命の生成
+      const destiny = `${name}さんは${zodiac}の影響を受け、${strokeCount}画の名前が示す「${strokeCount % 10 === 0 ? '完全なる調和' : '創造的なエネルギー'}」を持っています。${mbtiTraits[mbti] || '多様な才能と可能性'}という特性と組み合わさり、あなたの天命は「${mbti[0] === 'E' ? '人々を導き' : '深く考察し'}、${mbti[1] === 'N' ? '新たな可能性を見出し' : '現実的な解決策を提供し'}、${mbti[2] === 'F' ? '人々の心に寄り添いながら' : '論理的な判断に基づいて'}、${mbti[3] === 'P' ? '柔軟に状況に適応していく' : '確実に目標を達成していく'}」ことにあります。`;
+
+      // API呼び出し失敗時のバックアップレスポンス
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          destiny: destiny,
+          reincarnations: genericFigures,
+          resultId: Date.now().toString(),
+          fallback: true // これがバックアップ応答であることを示すフラグ
+        }),
+      };
+    }
+  } catch (error) {
+    console.error("エラー:", error);
+
+    // エラー応答
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({
+        error: "診断処理中にエラーが発生しました",
+        message: error.message,
+        fallback: true,
+        destiny: "申し訳ありませんが、処理中にエラーが発生しました。入力内容を確認して再度お試しください。",
+        reincarnations: []
+      }),
+    };
+  }
+};
