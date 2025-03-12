@@ -102,48 +102,70 @@ ${destinyData}
 `;
     }
 
-    // OpenAI API呼び出し
-    const response = await openai.createChatCompletion({
-      model: "gpt-3.5-turbo",
-      messages: [
-        { role: "system", content: "あなたは占い師です。依頼者の運命を詳細に診断します。" },
-        { role: "user", content: prompt }
-      ],
-      temperature: 0.7,
-      max_tokens: 1000
+    // OpenAI API呼び出しを非同期で行う
+    const getOpenAIResponse = async () => {
+      const response = await openai.createChatCompletion({
+        model: "gpt-3.5-turbo",
+        messages: [
+          { role: "system", content: "あなたは占い師です。依頼者の運命を詳細に診断します。" },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 1000
+      });
+      return response.data.choices[0].message.content;
+    };
+
+    // 非同期処理の開始
+    getOpenAIResponse().then(content => {
+      // 結果ID
+      const resultId = Date.now().toString();
+
+      // ステージに応じた結果を返す
+      if (stage === 'destiny' || !stage) {
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            stage: 'destiny',
+            result: content,
+            resultId
+          }),
+        };
+      } else if (stage === 'pastlife') {
+        // 前世データを解析して構造化
+        const reincarnations = extractReincarnations(content);
+
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            stage: 'pastlife',
+            reincarnations,
+            resultId
+          }),
+        };
+      }
+    }).catch(error => {
+      console.error("エラー:", error);
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({
+          error: "診断処理中にエラーが発生しました",
+          message: error.message
+        }),
+      };
     });
 
-    // 応答テキストを取得
-    const content = response.data.choices[0].message.content;
-
-    // 結果ID
-    const resultId = Date.now().toString();
-
-    // ステージに応じた結果を返す
-    if (stage === 'destiny' || !stage) {
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({
-          stage: 'destiny',
-          result: content,
-          resultId
-        }),
-      };
-    } else if (stage === 'pastlife') {
-      // 前世データを解析して構造化
-      const reincarnations = extractReincarnations(content);
-
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({
-          stage: 'pastlife',
-          reincarnations,
-          resultId
-        }),
-      };
-    }
+    // 処理中のメッセージを即座に返す
+    return {
+      statusCode: 202,
+      headers,
+      body: JSON.stringify({
+        message: "診断を処理中です。結果が準備でき次第、通知されます。"
+      }),
+    };
 
   } catch (error) {
     console.error("エラー:", error);
