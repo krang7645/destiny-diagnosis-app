@@ -617,12 +617,13 @@
                 // 読み込み表示
                 formSection.style.display = 'none';
                 loadingSection.style.display = 'block';
+                loadingSection.querySelector('.loading-text').textContent = '宇宙の彼方からあなたの天命を読み解いています...';
                 resultSection.style.display = 'none';
                 errorSection.style.display = 'none';
 
                 try {
-                    // Netlify Function APIリクエスト
-                    const response = await fetch('/api/analyze', {
+                    // 第一段階: 天命診断
+                    const destinyResponse = await fetch('/api/analyze', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -630,59 +631,93 @@
                         body: JSON.stringify({
                             name: name,
                             birthdate: formattedDate,
-                            mbti: mbti
+                            mbti: mbti,
+                            stage: 'destiny'
                         })
                     });
 
-                    // ローディング演出のため少し待機
-                    await new Promise(resolve => setTimeout(resolve, 3000));
-
-                    if (!response.ok) {
+                    if (!destinyResponse.ok) {
                         throw new Error('API request failed');
                     }
 
-                    const data = await response.json();
+                    const destinyData = await destinyResponse.json();
 
-                    // エラーフラグが明示的に含まれている場合でも結果を表示
-                    if (data.error && !data.destiny) {
-                        throw new Error(data.error);
+                    if (destinyData.error) {
+                        throw new Error(destinyData.error);
                     }
 
-                    // 結果の表示
-                    document.getElementById('destiny-result').innerHTML = `<div class="destiny-content">${data.destiny || ''}</div>`;
+                    // 天命結果の表示
+                    document.getElementById('destiny-result').innerHTML = `<div class="destiny-content">${destinyData.result}</div>`;
 
+                    // 結果の一部表示（天命のみ）
+                    loadingSection.style.display = 'none';
+                    resultSection.style.display = 'block';
+                    document.querySelector('h2:nth-of-type(2)').style.display = 'none'; // 前世の見出しを隠す
+                    document.querySelector('#result > p').style.display = 'none'; // 前世の説明を隠す
+                    document.getElementById('reincarnation-result').style.display = 'none';
+
+                    // 前世診断中の表示
+                    loadingSection.style.display = 'block';
+                    loadingSection.querySelector('.loading-text').textContent = '過去世の可能性を探索しています...';
+
+                    // 第二段階: 前世診断
+                    const pastLifeResponse = await fetch('/api/analyze', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            name: name,
+                            birthdate: formattedDate,
+                            mbti: mbti,
+                            stage: 'pastlife',
+                            destinyData: destinyData.result
+                        })
+                    });
+
+                    if (!pastLifeResponse.ok) {
+                        throw new Error('Past life API request failed');
+                    }
+
+                    const pastLifeData = await pastLifeResponse.json();
+
+                    if (pastLifeData.error) {
+                        throw new Error(pastLifeData.error);
+                    }
+
+                    // 前世結果の表示
                     let reincarnationHtml = '';
-                    if (data.reincarnations && Array.isArray(data.reincarnations)) {
-                        data.reincarnations.forEach((person, index) => {
-                            reincarnationHtml += `
-                                <div class="result-item">
-                                    <div class="person-name">${index + 1}. ${person.name || '不明'}（${person.years || '不明'}）</div>
-                                    <div><strong>理由:</strong></div>
-                                    <ul class="reason-list">
-                                        ${(person.reasons || []).map(reason => `<li>${reason}</li>`).join('')}
-                                    </ul>
-                                    <p>${person.conclusion || ''}</p>
-                                </div>
-                            `;
-                        });
-                    }
+                    pastLifeData.reincarnations.forEach((person, index) => {
+                        reincarnationHtml += `
+                            <div class="result-item">
+                                <div class="person-name">${index + 1}. ${person.name}（${person.years}）</div>
+                                <div><strong>理由:</strong></div>
+                                <ul class="reason-list">
+                                    ${person.reasons.map(reason => `<li>${reason}</li>`).join('')}
+                                </ul>
+                                <p>${person.conclusion}</p>
+                            </div>
+                        `;
+                    });
 
                     document.getElementById('reincarnation-result').innerHTML = reincarnationHtml;
 
-                    // 結果セクションの表示（フェードインアニメーション用に少し遅延）
-                    setTimeout(() => {
-                        loadingSection.style.display = 'none';
-                        resultSection.style.display = 'block';
-                        shareSection.style.display = 'block';
-                    }, 500);
+                    // 完全な結果表示
+                    loadingSection.style.display = 'none';
+                    resultSection.style.display = 'block';
+                    document.querySelector('h2:nth-of-type(2)').style.display = 'block'; // 前世の見出しを表示
+                    document.querySelector('#result > p').style.display = 'block'; // 前世の説明を表示
+                    document.getElementById('reincarnation-result').style.display = 'block';
+                    shareSection.style.display = 'block';
 
                     // URLパラメータの設定（共有用）
-                    if (data.resultId) {
-                        const shareUrl = `${window.location.origin}${window.location.pathname}?result=${data.resultId}&name=${encodeURIComponent(name)}`;
+                    const resultId = pastLifeData.resultId || destinyData.resultId;
+                    if (resultId) {
+                        const shareUrl = `${window.location.origin}${window.location.pathname}?result=${resultId}&name=${encodeURIComponent(name)}`;
                         setupShareButtons(shareUrl, name);
 
                         // URLを更新（履歴に追加）
-                        const newUrl = `${window.location.pathname}?result=${data.resultId}&name=${encodeURIComponent(name)}`;
+                        const newUrl = `${window.location.pathname}?result=${resultId}&name=${encodeURIComponent(name)}`;
                         window.history.pushState({ path: newUrl }, '', newUrl);
                     }
 

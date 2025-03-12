@@ -16,5 +16,6 @@
   node_bundler = "esbuild"
   external_node_modules = ["openai"]
 
+# 各関数のタイムアウト設定（Pro以上のプランで有効）
 [functions.analyze]
-  timeout = 30
+  timeout = 10  # デフォルトの10秒
