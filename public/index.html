@@ -468,6 +468,22 @@
                 margin-bottom: 10px;
             }
         }
+
+                /* ここに新しいCSSルールを追加 */
+        .destiny-content {
+            line-height: 1.8;
+            white-space: pre-line;
+        }
+
+        .destiny-content strong,
+        .reason-list strong {
+            color: var(--primary-color);
+            font-weight: 700;
+        }
+
+        .reason-list li {
+            margin-bottom: 12px;
+        }
     </style>
 </head>
 <body>
@@ -632,14 +648,14 @@
                     }
 
                     // 結果の表示
-                    document.getElementById('destiny-result').innerHTML = `<p>${data.destiny}</p>`;
+                    document.getElementById('destiny-result').innerHTML = `<div class="destiny-content">${data.destiny}</div>`;
 
                     let reincarnationHtml = '';
                     data.reincarnations.forEach((person, index) => {
                         reincarnationHtml += `
                             <div class="result-item">
                                 <div class="person-name">${index + 1}. ${person.name}（${person.years}）</div>
-                                <div><strong>あなたとの共通点:</strong></div>
+                                <div><strong>理由:</strong></div>
                                 <ul class="reason-list">
                                     ${person.reasons.map(reason => `<li>${reason}</li>`).join('')}
                                 </ul>
