@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>運命診断アプリ - あなたの前世を探る</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        h1, h2, h3 {
+            color: #2c3e50;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.2em;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        label {
+            display: block;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            margin-top: 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background-color: #2980b9;
+        }
+        
+        .loading {
+            text-align: center;
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top: 4px solid #3498db;
+            width: 40px;
+            height: 40px;
+            margin: 0 auto;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-left: 5px solid #3498db;
+            display: none;
+        }
+        
+        .result h2 {
+            color: #3498db;
+            margin-top: 0;
+        }
+        
+        .result-item {
+            margin-bottom: 20px;
+        }
+        
+        .person-name {
+            font-weight: bold;
+            font-size: 1.3em;
+        }
+        
+        .reason-list {
+            margin-top: 10px;
+        }
+        
+        .error {
+            color: #e74c3c;
+            text-align: center;
+            display: none;
+        }
+        
+        footer {
+            margin-top: 40px;
+            text-align: center;
+            font-size: 0.9em;
+            color: #7f8c8d;
+        }
+        
+        .share-section {
+            margin-top: 30px;
+            text-align: center;
+            display: none;
+        }
+        
+        .share-button {
+            background-color: #2ecc71;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 0 5px;
+            transition: background-color 0.3s;
+        }
+        
+        .share-button:hover {
+            background-color: #27ae60;
+        }
+        
+        .restart-button {
+            background-color: #95a5a6;
+            margin-top: 20px;
+        }
+        
+        .restart-button:hover {
+            background-color: #7f8c8d;
+        }
+        
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+            }
+            
+            h1 {
+                font-size: 1.8em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>運命診断アプリ<br><small>あなたの前世を探る</small></h1>
+    
+    <div class="container">
+        <div id="form-section">
+            <label for="name">名前（漢字・ひらがな）:</label>
+            <input type="text" id="name" placeholder="例：小松竜之介" required>
+            
+            <label for="birthdate">生年月日:</label>
+            <input type="date" id="birthdate" required>
+            
+            <label for="mbti">MBTI:</label>
+            <select id="mbti" required>
+                <option value="">選択してください</option>
+                <option value="INTJ">INTJ - 建築家</option>
+                <option value="INTP">INTP - 論理学者</option>
+                <option value="ENTJ">ENTJ - 指揮官</option>
+                <option value="ENTP">ENTP - 討論者</option>
+                <option value="INFJ">INFJ - 提唱者</option>
+                <option value="INFP">INFP - 仲介者</option>
+                <option value="ENFJ">ENFJ - 主人公</option>
+                <option value="ENFP">ENFP - 広報運動家</option>
+                <option value="ISTJ">ISTJ - 管理者</option>
+                <option value="ISFJ">ISFJ - 擁護者</option>
+                <option value="ESTJ">ESTJ - 幹部</option>
+                <option value="ESFJ">ESFJ - 領事官</option>
+                <option value="ISTP">ISTP - 巨匠</option>
+                <option value="ISFP">ISFP - 冒険家</option>
+                <option value="ESTP">ESTP - 起業家</option>
+                <option value="ESFP">ESFP - エンターテイナー</option>
+            </select>
+            
+            <button id="analyze">運命を診断する</button>
+        </div>
+        
+        <div class="loading" id="loading">
+            <p>あなたの運命を解析中...</p>
+            <div class="spinner"></div>
+        </div>
+        
+        <div class="error" id="error">
+            <p>エラーが発生しました。しばらくしてからもう一度お試しください。</p>
+        </div>
+        
+        <div class="result" id="result">
+            <h2>あなたの天命と前世</h2>
+            <div id="destiny-result"></div>
+            <h3>あなたは次の歴史上の人物の生まれ変わりである可能性が高いです：</h3>
+            <div id="reincarnation-result"></div>
+            
+            <div class="share-section" id="share-section">
+                <p>結果をシェアしましょう！</p>
+                <button class="share-button" id="share-twitter">Twitter</button>
+                <button class="share-button" id="share-line">LINE</button>
+                <button class="share-button" id="copy-url">URLをコピー</button>
+            </div>
+            
+            <button class="restart-button" id="restart">もう一度診断する</button>
+        </div>
+    </div>
+    
+    <footer>
+        <p>© 2025 運命診断アプリ - このアプリはOpenAI APIを使用しています</p>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const formSection = document.getElementById('form-section');
+            const loadingSection = document.getElementById('loading');
+            const errorSection = document.getElementById('error');
+            const resultSection = document.getElementById('result');
+            const shareSection = document.getElementById('share-section');
+            
+            const nameInput = document.getElementById('name');
+            const birthdateInput = document.getElementById('birthdate');
+            const mbtiSelect = document.getElementById('mbti');
+            
+            const analyzeButton = document.getElementById('analyze');
+            const restartButton = document.getElementById('restart');
+            
+            // 診断実行
+            analyzeButton.addEventListener('click', async function() {
+                // 入力値の取得
+                const name = nameInput.value;
+                const birthdate = birthdateInput.value;
+                const mbti = mbtiSelect.value;
+                
+                // バリデーション
+                if (!name || !birthdate || !mbti) {
+                    alert('すべての項目を入力してください');
+                    return;
+                }
+                
+                // 日付の整形
+                const date = new Date(birthdate);
+                const formattedDate = `${date.getFullYear()}年${(date.getMonth() + 1).toString().padStart(2, '0')}月${date.getDate().toString().padStart(2, '0')}日`;
+                
+                // 読み込み表示
+                formSection.style.display = 'none';
+                loadingSection.style.display = 'block';
+                resultSection.style.display = 'none';
+                errorSection.style.display = 'none';
+                
+                try {
+                    // Netlify Function APIリクエスト
+                    const response = await fetch('/api/analyze', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            name: name,
+                            birthdate: formattedDate,
+                            mbti: mbti
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('API request failed');
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+                    
+                    // 結果の表示
+                    document.getElementById('destiny-result').innerHTML = `<p>${data.destiny}</p>`;
+                    
+                    let reincarnationHtml = '';
+                    data.reincarnations.forEach((person, index) => {
+                        reincarnationHtml += `
+                            <div class="result-item">
+                                <div class="person-name">${index + 1}. ${person.name}（${person.years}）</div>
+                                <div><strong>理由:</strong></div>
+                                <ul class="reason-list">
+                                    ${person.reasons.map(reason => `<li>${reason}</li>`).join('')}
+                                </ul>
+                                <p>${person.conclusion}</p>
+                            </div>
+                        `;
+                    });
+                    
+                    document.getElementById('reincarnation-result').innerHTML = reincarnationHtml;
+                    
+                    // 結果セクションの表示
+                    loadingSection.style.display = 'none';
+                    resultSection.style.display = 'block';
+                    shareSection.style.display = 'block';
+                    
+                    // URLパラメータの設定（共有用）
+                    if (data.resultId) {
+                        const shareUrl = `${window.location.origin}${window.location.pathname}?result=${data.resultId}&name=${encodeURIComponent(name)}`;
+                        setupShareButtons(shareUrl, name);
+                        
+                        // URLを更新（履歴に追加）
+                        const newUrl = `${window.location.pathname}?result=${data.resultId}&name=${encodeURIComponent(name)}`;
+                        window.history.pushState({ path: newUrl }, '', newUrl);
+                    }
+                    
+                } catch (error) {
+                    console.error('Error:', error);
+                    loadingSection.style.display = 'none';
+                    errorSection.style.display = 'block';
+                    
+                    // 5秒後にフォームに戻る
+                    setTimeout(() => {
+                        errorSection.style.display = 'none';
+                        formSection.style.display = 'block';
+                    }, 5000);
+                }
+            });
+            
+            // やり直しボタン
+            restartButton.addEventListener('click', function() {
+                // フォームをリセット
+                nameInput.value = '';
+                birthdateInput.value = '';
+                mbtiSelect.value = '';
+                
+                // 表示切替
+                resultSection.style.display = 'none';
+                formSection.style.display = 'block';
+                
+                // URLをリセット
+                window.history.pushState({}, '', window.location.pathname);
+            });
+            
+            // シェアボタンの設定
+            function setupShareButtons(shareUrl, name) {
+                // Twitterシェア
+                document.getElementById('share-twitter').addEventListener('click', function() {
+                    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(`私の前世診断結果：${name}の前世を診断しました！`)}&url=${encodeURIComponent(shareUrl)}`;
+                    window.open(twitterUrl, '_blank');
+                });
+                
+                // LINEシェア
+                document.getElementById('share-line').addEventListener('click', function() {
+                    const lineUrl = `https://line.me/R/msg/text/?${encodeURIComponent(`私の前世診断結果：${name}の前世を診断しました！ ${shareUrl}`)}`;
+                    window.open(lineUrl, '_blank');
+                });
+                
+                // URLコピー
+                document.getElementById('copy-url').addEventListener('click', function() {
+                    navigator.clipboard.writeText(shareUrl).then(() => {
+                        alert('URLをクリップボードにコピーしました！');
+                    }).catch(err => {
+                        console.error('クリップボードへのコピーに失敗しました', err);
+                    });
+                });
+            }
+            
+            // URL検索パラメータのチェック（結果共有表示用）
+            // 注: 完全な結果共有機能はバックエンドでの結果保存が必要です
+            // この実装は、URLパラメータを表示するための簡易的なものです
+            const urlParams = new URLSearchParams(window.location.search);
+            const resultParam = urlParams.get('result');
+            const nameParam = urlParams.get('name');
+            
+            if (resultParam) {
+                // 結果IDがある場合、共有されたURLと見なす
+                formSection.style.display = 'none';
+                loadingSection.style.display = 'block';
+                
+                // 注: 実際の実装では、ここでAPIから結果を取得する処理が必要です
+                // 以下は例示的なもので、実際には機能しません
+                
+                // ダミーテキストの表示（実際には使用しない）
+                setTimeout(() => {
+                    loadingSection.style.display = 'none';
+                    document.getElementById('destiny-result').innerHTML = `<p>※注：この表示はデモです。実際の共有機能を実装するには、結果をデータベースに保存する必要があります。</p>`;
+                    document.getElementById('reincarnation-result').innerHTML = `<p>共有URL: ${window.location.href}<br>結果ID: ${resultParam}<br>名前: ${nameParam || '不明'}</p>`;
+                    resultSection.style.display = 'block';
+                }, 1000);
+            }
+        });
+    </script>
+</body>
+</html>
