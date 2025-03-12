@@ -83,17 +83,25 @@ MBTI: ${mbti}
 すべての解析は、小松竜之介（1990年7月31日生まれ、ESFP）の例のようなフォーマットと詳細さで行ってください。
 `;
 
+    // APIタイムアウトを回避するためのタイムアウト設定付きのAPIリクエスト
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('APIタイムアウト')), 7000); // 7秒でタイムアウト
+    });
+
     try {
-      // OpenAI API呼び出し (v3系の構文)
-      const response = await openai.createChatCompletion({
-        model: "gpt-3.5-turbo",
-        messages: [
-          { role: "system", content: "あなたは占い・姓名判断・運命診断の専門家です。依頼者の情報を元に詳細な天命と前世の分析をします。" },
-          { role: "user", content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 1500
-      });
+      // タイムアウト付きのAPI呼び出し
+      const result = await Promise.race([
+        openai.createChatCompletion({
+          model: "gpt-3.5-turbo",
+          messages: [
+            { role: "system", content: "あなたは占い師です。簡潔かつ具体的に依頼者の天命と前世を診断してください。" },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 3000
+        }),
+        timeoutPromise
+      ]);
 
       // 応答テキストを取得
       const content = response.data.choices[0].message.content;
