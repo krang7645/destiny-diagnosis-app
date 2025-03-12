@@ -13,9 +13,8 @@
   status = 200
 
 [functions]
-  # タイムアウトを30秒に延長
   node_bundler = "esbuild"
   external_node_modules = ["openai"]
+
+[functions.analyze]
   timeout = 30
-
-
