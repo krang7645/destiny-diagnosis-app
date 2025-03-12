@@ -6,8 +6,7 @@
     "dev": "netlify dev"
   },
   "dependencies": {
-    "openai": "^3.2.1",
-    "uuid": "^9.0.1"
+    "openai": "^3.2.1"
   },
   "devDependencies": {
     "netlify-cli": "^15.0.0"
