@@ -59,99 +59,131 @@ exports.handler = async function(event, context) {
 
     // プロンプトを簡素化して応答速度を上げる
     const prompt = `
-以下の情報から運命診断をJSONで返してください。
+あなたは占いの専門家です。依頼者の情報をもとに、その人の「天命」と「前世」を詳細に診断してください。
+回答は以下のフォーマットを厳密に守って生成してください。
+
+【依頼者情報】
 名前: ${name}
 生年月日: ${birthdate}
 MBTI: ${mbti}
 
-出力形式:
-{
-  "destiny": "天命の説明（1段落）",
-  "reincarnations": [
-    {"name": "人物1名前", "years": "生没年", "reasons": ["理由1", "理由2", "理由3", "理由4"], "conclusion": "結論"},
-    {"name": "人物2名前", "years": "生没年", "reasons": ["理由1", "理由2", "理由3", "理由4"], "conclusion": "結論"},
-    {"name": "人物3名前", "years": "生没年", "reasons": ["理由1", "理由2", "理由3", "理由4"], "conclusion": "結論"}
-  ]
-}`;
+【診断内容】
+まず、依頼者の概要から始め、親しみやすい語り口で話しかけるように書いてください：
+「${name}さん（${birthdate}生まれ・${mbti}）の天命を占うには、**生年月日・MBTI・星座・数秘術**などの視点から総合的に見ていくのが面白いね。」
+
+次に、以下の4セクションで構成する詳細な分析を提供してください：
+
+1. 星座分析：
+  - 生年月日から星座を特定
+  - その星座の特徴と向いている仕事
+
+2. MBTI分析：
+  - MBTIタイプの基本的特徴を箇条書きで3つ程度
+  - その性格から導き出される向いている仕事
+
+3. 数秘術：
+  - 生年月日を数秘術で計算（各桁の数字を足して1桁になるまで計算）
+  - その数字の意味と使命
+
+4. 姓名判断：
+  - 姓と名の画数およびその意味
+  - 名前の音の響きの分析
+  - 漢字の意味と象徴性
+
+最後に、これらの分析を統合して「天命」をまとめ、その天命に基づいて前世と考えられる歴史上の人物を3人挙げてください。各人物について：
+  - 名前と生没年
+  - その人物が前世である理由を箇条書きで4点
+  - 結論（→ で始まる一文）
+
+すべての回答は親しみやすく、興味を引く口調で、詳細かつ具体的に書いてください。
+`;
 
     try {
       // OpenAI API呼び出し (v3系の構文)
       const response = await openai.createChatCompletion({
         model: "gpt-3.5-turbo",
         messages: [
-          { role: "system", content: "あなたは運命診断の専門家です。回答は必ず指定されたJSON形式で簡潔に返してください。" },
+          { role: "system", content: "あなたは占い・姓名判断・運命診断の専門家です。依頼者の情報を元に詳細な天命と前世の分析をします。" },
           { role: "user", content: prompt }
         ],
-        temperature: 0.5,
-        max_tokens: 800
+        temperature: 0.7,
+        max_tokens: 1500
       });
 
       // 応答テキストを取得
       const content = response.data.choices[0].message.content;
 
-      // JSONを解析
-      try {
-        const resultData = JSON.parse(content);
+      // テキスト形式の応答を構造化
+      const destiny = content.split(/前世|歴史上の人物/)[0].trim();
 
-        // 結果ID
-        const resultId = Date.now().toString();
+      // 前世の部分を抽出
+      const reincarnationText = content.split(/前世|歴史上の人物/)[1] || "";
 
-        // 成功レスポンス
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({
-            ...resultData,
-            resultId
-          }),
-        };
-      } catch (jsonError) {
-        console.error("JSONパースエラー:", jsonError);
+      // 正規表現で3人の人物を抽出
+      const personMatches = reincarnationText.match(/\d+\.\s+(.*?)（(.*?)）[\s\S]*?→\s+(.*?)(?=\s*\d+\.\s+|$)/g);
 
-        // JSONパースエラー時はテキストからJSONを抽出
-        const jsonMatch = content.match(/\{[\s\S]*\}/);
+      const reincarnations = [];
 
-        if (jsonMatch) {
-          try {
-            const extractedData = JSON.parse(jsonMatch[0]);
-            return {
-              statusCode: 200,
-              headers,
-              body: JSON.stringify({
-                ...extractedData,
-                resultId: Date.now().toString()
-              }),
-            };
-          } catch (e) {
-            throw new Error("JSONの抽出とパースに失敗しました");
+      if (personMatches) {
+        personMatches.forEach(match => {
+          const nameMatch = match.match(/\d+\.\s+(.*?)（(.*?)）/);
+          const reasonsMatch = match.match(/•\s+(.*?)(?=•|\n|→)/g);
+          const conclusionMatch = match.match(/→\s+(.*?)$/);
+
+          if (nameMatch) {
+            const name = nameMatch[1];
+            const years = nameMatch[2];
+
+            const reasons = reasonsMatch ?
+              reasonsMatch.map(r => r.replace(/^•\s+/, '').trim()) :
+              [];
+
+            const conclusion = conclusionMatch ?
+              conclusionMatch[1].trim() :
+              "";
+
+            reincarnations.push({
+              name,
+              years,
+              reasons,
+              conclusion
+            });
           }
-        } else {
-          throw new Error("APIレスポンスからJSONを見つけられませんでした");
-        }
+        });
       }
+
+      // 3人に満たない場合はダミーデータを追加
+      while (reincarnations.length < 3) {
+        reincarnations.push({
+          name: `歴史上の人物${reincarnations.length + 1}`,
+          years: "不明",
+          reasons: [
+            "**特徴1**：詳細な説明",
+            "**特徴2**：詳細な説明",
+            "**特徴3**：詳細な説明",
+            "**特徴4**：詳細な説明"
+          ],
+          conclusion: "→ **「キーポイント」**の点で共通点があります！"
+        });
+      }
+
+      // 結果ID
+      const resultId = Date.now().toString();
+
+      // 成功レスポンス
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          destiny,
+          reincarnations,
+          resultId
+        }),
+      };
     } catch (apiError) {
       console.error("API呼び出しエラー:", apiError);
 
-      // バックアップロジック - MBTIタイプに基づいた代替レスポンスを生成
-      const mbtiTraits = {
-        'INTJ': '論理的思考と長期的なビジョンで世界を変革する',
-        'INTP': '知的探求と理論の構築によって新たな知見をもたらす',
-        'ENTJ': 'リーダーシップと戦略的思考で組織や社会を導く',
-        'ENTP': '革新的なアイデアと議論によって既存の枠組みを壊す',
-        'INFJ': '深い洞察力と誠実さで人々の心に触れ、社会に貢献する',
-        'INFP': '理想と創造性によって世界に美と調和をもたらす',
-        'ENFJ': '人々の成長を促し、コミュニティの絆を強める',
-        'ENFP': '情熱と創造性で人々を鼓舞し、可能性を広げる',
-        'ISTJ': '秩序と責任感によって社会の安定を支える',
-        'ISFJ': '思いやりと献身によって周囲の人々を支え守る',
-        'ESTJ': '効率性と実行力で組織を導き、目標を達成する',
-        'ESFJ': '調和と協力を促進し、コミュニティの結束を高める',
-        'ISTP': '実践的な問題解決と適応力で状況を打開する',
-        'ISFP': '感性と自由な表現によって人々の心に美を届ける',
-        'ESTP': '行動力と機転で困難を乗り越え、人生を楽しむ',
-        'ESFP': '活力と魅力で周囲を明るくし、人々に喜びをもたらす'
-      };
-
+      // API呼び出し失敗時のバックアップ応答
       // 星座の計算
       const birthParts = birthdate.match(/(\d{4})年(\d{2})月(\d{2})日/);
       let zodiac = '';
@@ -171,15 +203,48 @@ MBTI: ${mbti}
         else if ((month === 12 && day >= 22) || (month === 1 && day <= 19)) zodiac = '山羊座';
         else if ((month === 1 && day >= 20) || (month === 2 && day <= 18)) zodiac = '水瓶座';
         else zodiac = '魚座';
-      } else {
-        zodiac = '不明な星座';
       }
 
-      // 字画の簡易計算
-      const strokeCount = name.length * 7 + 2;
+      // バックアップ用のサンプル診断
+      const sampleDestiny = `${name}さん（${birthdate}生まれ・${mbti}）の天命を占うには、**生年月日・MBTI・星座・数秘術**などの視点から総合的に見ていくのが面白いね。
 
-      // 汎用的な歴史上の人物リスト
-      const genericFigures = [
+**1. 星座：${zodiac}**
+
+${zodiac}は「個性」と「直感力」の星。生まれつき創造的な発想があり、人との繋がりを大切にする傾向があります。表現力が豊かで、芸術やコミュニケーションの分野で才能を発揮することが多いでしょう。
+
+**2. MBTI：${mbti}**
+
+${mbti}の特徴：
+✔ 洞察力に優れ、物事の本質を見抜く力がある
+✔ 創造的な問題解決能力を持ち、新しいアイディアを生み出す
+✔ 人間関係において誠実さを大切にする
+
+この性格だと「創造的な仕事」や「人の役に立つ仕事」が向いています。アーティスト、教育者、カウンセラー、研究者など、深い思考と創造性が求められる分野で才能を発揮するでしょう。
+
+**3. 数秘術（${birthdate.replace(/[年月日]/g, '')} → 計算結果）**
+
+数秘術で導かれるのは「7」= **分析と探求の数字**。
+✔ 深い洞察力と分析力を持つ
+✔ 精神的な成長と真理の探求が人生のテーマ
+✔ 独自の視点で物事を見る才能がある
+
+**4. 姓名判断**
+
+**${name}**の画数分析：
+• 総画数：27画
+• 天格：8画（リーダーシップの数）
+• 人格：15画（創造性の数）
+• 地格：12画（協調性の数）
+
+**画数の意味**
+✅ 27画（総画数）：独創的、革新的、強い意志力
+✅ 漢字の意味：「知恵」と「力強さ」の象徴
+
+**→ 結論：「創造性と分析力を活かして、新しい道を切り拓く才能がある」**
+
+あなたの天命は「**深い洞察力と創造性を活かし、周囲の人々に新しい視点をもたらす**」ことにあります。既存の枠組みにとらわれず、独自の道を切り拓くことで成功するでしょう。`;
+
+      const sampleReincarnations = [
         {
           name: "レオナルド・ダ・ヴィンチ",
           years: "1452-1519",
@@ -215,16 +280,13 @@ MBTI: ${mbti}
         }
       ];
 
-      // 天命の生成
-      const destiny = `${name}さんは${zodiac}の影響を受け、${strokeCount}画の名前が示す「${strokeCount % 10 === 0 ? '完全なる調和' : '創造的なエネルギー'}」を持っています。${mbtiTraits[mbti] || '多様な才能と可能性'}という特性と組み合わさり、あなたの天命は「${mbti[0] === 'E' ? '人々を導き' : '深く考察し'}、${mbti[1] === 'N' ? '新たな可能性を見出し' : '現実的な解決策を提供し'}、${mbti[2] === 'F' ? '人々の心に寄り添いながら' : '論理的な判断に基づいて'}、${mbti[3] === 'P' ? '柔軟に状況に適応していく' : '確実に目標を達成していく'}」ことにあります。`;
-
       // API呼び出し失敗時のバックアップレスポンス
       return {
         statusCode: 200,
         headers,
         body: JSON.stringify({
-          destiny: destiny,
-          reincarnations: genericFigures,
+          destiny: sampleDestiny,
+          reincarnations: sampleReincarnations,
           resultId: Date.now().toString(),
           fallback: true // これがバックアップ応答であることを示すフラグ
         }),
