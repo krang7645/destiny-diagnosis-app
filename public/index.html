@@ -643,26 +643,29 @@
 
                     const data = await response.json();
 
-                    if (data.error) {
+                    // エラーフラグが明示的に含まれている場合でも結果を表示
+                    if (data.error && !data.destiny) {
                         throw new Error(data.error);
                     }
 
                     // 結果の表示
-                    document.getElementById('destiny-result').innerHTML = `<div class="destiny-content">${data.destiny}</div>`;
+                    document.getElementById('destiny-result').innerHTML = `<div class="destiny-content">${data.destiny || ''}</div>`;
 
                     let reincarnationHtml = '';
-                    data.reincarnations.forEach((person, index) => {
-                        reincarnationHtml += `
-                            <div class="result-item">
-                                <div class="person-name">${index + 1}. ${person.name}（${person.years}）</div>
-                                <div><strong>理由:</strong></div>
-                                <ul class="reason-list">
-                                    ${person.reasons.map(reason => `<li>${reason}</li>`).join('')}
-                                </ul>
-                                <p>${person.conclusion}</p>
-                            </div>
-                        `;
-                    });
+                    if (data.reincarnations && Array.isArray(data.reincarnations)) {
+                        data.reincarnations.forEach((person, index) => {
+                            reincarnationHtml += `
+                                <div class="result-item">
+                                    <div class="person-name">${index + 1}. ${person.name || '不明'}（${person.years || '不明'}）</div>
+                                    <div><strong>理由:</strong></div>
+                                    <ul class="reason-list">
+                                        ${(person.reasons || []).map(reason => `<li>${reason}</li>`).join('')}
+                                    </ul>
+                                    <p>${person.conclusion || ''}</p>
+                                </div>
+                            `;
+                        });
+                    }
 
                     document.getElementById('reincarnation-result').innerHTML = reincarnationHtml;
 
@@ -695,6 +698,8 @@
                     }, 5000);
                 }
             });
+
+
 
             // やり直しボタン
             restartButton.addEventListener('click', function() {
