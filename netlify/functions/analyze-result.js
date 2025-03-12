@@ -31,7 +31,7 @@ exports.handler = async function(event, context) {
     const resultId = event.path.split('/').pop();
 
     const demoData = {
-      destiny: `デモユーザーさんの天命診断結果...`,
+      stage: 'pastlife',
       reincarnations: [
         {
           name: "デモ人物1",
@@ -44,7 +44,28 @@ exports.handler = async function(event, context) {
           ],
           conclusion: "→ **「キーポイント」**の点で共通点があります！"
         },
-        // 他の人物も同様に
+        {
+          name: "デモ人物2",
+          years: "YYYY-YYYY",
+          reasons: [
+            "**特性1**：詳細説明",
+            "**特性2**：詳細説明",
+            "**特性3**：詳細説明",
+            "**特性4**：詳細説明"
+          ],
+          conclusion: "→ **「キーポイント」**の点で共通点があります！"
+        },
+        {
+          name: "デモ人物3",
+          years: "YYYY-YYYY",
+          reasons: [
+            "**特性1**：詳細説明",
+            "**特性2**：詳細説明",
+            "**特性3**：詳細説明",
+            "**特性4**：詳細説明"
+          ],
+          conclusion: "→ **「キーポイント」**の点で共通点があります！"
+        }
       ]
     };
 
