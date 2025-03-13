@@ -303,32 +303,69 @@ function extractReincarnations(content) {
     const reasons = [];
     const reasonsSection = section.split('▶︎')[0];
     const lines = reasonsSection.split('\n');
+    let currentReasons = [];
     for (const line of lines) {
       const trimmedLine = line.trim();
       if (trimmedLine.startsWith('→')) {
         const reason = trimmedLine.substring(1).trim();
-        if (reason) reasons.push(reason);
+        if (reason) currentReasons.push(reason);
+      } else if (!trimmedLine.includes('候補') && !trimmedLine.includes('：') &&
+                 !trimmedLine.includes('『') && !trimmedLine.includes('』') &&
+                 trimmedLine.length > 10) {
+        currentReasons.push(trimmedLine);
       }
     }
+
+    // 長い文章を3つの理由に分割
+    let processedReasons = [];
+    if (currentReasons.length > 0) {
+      const fullText = currentReasons.join(' ').replace(/。/g, '。\n').split('\n').filter(Boolean);
+
+      // テキストを3つのパートに分割
+      if (fullText.length >= 3) {
+        processedReasons = fullText.slice(0, 3);
+      } else if (fullText.length === 2) {
+        processedReasons = [...fullText, '更なる特徴を分析中です'];
+      } else if (fullText.length === 1) {
+        const parts = fullText[0].split('。').filter(Boolean);
+        if (parts.length >= 3) {
+          processedReasons = parts.slice(0, 3).map(p => p + '。');
+        } else {
+          processedReasons = [...parts.map(p => p + '。'), ...Array(3 - parts.length).fill('特徴を分析中です')];
+        }
+      }
+    }
+
+    reasons.push(...(processedReasons.length > 0 ? processedReasons : [
+      'この歴史上の人物の業績を分析しています',
+      'その人物の特徴や哲学を分析しています',
+      `${name}さんとの共通点を分析しています`
+    ]));
 
     // 結論を抽出
     let conclusion = '';
     const conclusionMatch = section.match(/▶︎[^→]*→\s*([^\n]+)/);
     if (conclusionMatch) {
       conclusion = conclusionMatch[1].trim();
+    } else {
+      const conclusionSection = section.split('▶︎')[1];
+      if (conclusionSection) {
+        const lines = conclusionSection.split('\n');
+        for (const line of lines) {
+          if (line.trim() && !line.includes('⸻')) {
+            conclusion = line.trim().replace(/^→\s*/, '');
+            break;
+          }
+        }
+      }
     }
 
-    // 候補者情報を追加（reasonsが空の場合は全文を1つの理由として扱う）
-    const sectionContent = section.split('『')[0].split('\n')
-      .filter(line => line.trim() && !line.includes('候補') && !line.includes('：'))
-      .join(' ').trim();
-
+    // 候補者情報を追加
     reincarnations.push({
       name,
       years,
       quote: quote || "名言を分析中",
-      reasons: reasons.length > 0 ? reasons :
-        sectionContent ? [sectionContent] : ['この歴史上の人物の特徴を分析しています'],
+      reasons: reasons.slice(0, 3),  // 必ず3つの理由に制限
       conclusion: conclusion || '現代での活躍の可能性を分析しています'
     });
   }
