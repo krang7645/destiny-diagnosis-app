@@ -33,6 +33,14 @@ async function callOpenAIWithRetry(openai, messages, retryCount = 0) {
       console.error('Error response status:', error.response.status);
     }
 
+    // レート制限エラーの特別処理
+    if (error.response?.status === 429) {
+      const retryAfter = error.response.headers['retry-after'] || 60;
+      console.log(`Rate limit exceeded. Waiting for ${retryAfter} seconds before retry...`);
+      await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+      return callOpenAIWithRetry(openai, messages, retryCount);
+    }
+
     // タイムアウトエラーまたはその他のエラーの場合、リトライを試みる
     if (retryCount < MAX_RETRIES) {
       const nextRetryDelay = RETRY_DELAY * Math.pow(2, retryCount); // 指数バックオフを強化
@@ -42,8 +50,12 @@ async function callOpenAIWithRetry(openai, messages, retryCount = 0) {
     }
 
     // 最大リトライ回数を超えた場合
-    console.error('Maximum retry attempts reached');
-    throw new Error(`APIリクエストが${MAX_RETRIES + 1}回失敗しました: ${error.message}`);
+    if (error.response?.status === 429) {
+      throw new Error("APIのレート制限に達しました。しばらく時間をおいてから再度お試しください。");
+    } else {
+      console.error('Maximum retry attempts reached');
+      throw new Error(`APIリクエストが${MAX_RETRIES + 1}回失敗しました: ${error.message}`);
+    }
   }
 }
 
