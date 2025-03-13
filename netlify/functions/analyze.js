@@ -17,7 +17,7 @@ async function callOpenAIWithRetry(openai, messages, retryCount = 0) {
         model: "gpt-3.5-turbo",
         messages: messages,
         temperature: 0.7,
-        max_tokens: 1000
+        max_tokens: 2000
       }),
       new Promise((_, reject) =>
         setTimeout(() => reject(new Error('APIリクエストがタイムアウトしました')), TIMEOUT)
@@ -277,7 +277,7 @@ function extractReincarnations(content) {
   const fullText = content.trim();
 
   // 候補を抽出（「候補X：」で分割）
-  const sections = fullText.split(/候補\d+：/).filter(Boolean);
+  const sections = fullText.split(/(?=候補[1-3]：)/).filter(Boolean);
 
   const reincarnations = [];
   const expectedCandidates = 3;
@@ -285,9 +285,10 @@ function extractReincarnations(content) {
   // 各セクションから情報を抽出
   for (let i = 0; i < sections.length && i < expectedCandidates; i++) {
     const section = sections[i];
+    console.log(`Processing section ${i + 1}:`, section.substring(0, 100)); // デバッグ用ログ
 
     // 名前と年代を抽出
-    const nameMatch = section.match(/([^（\n]+)（([^）]+)）/);
+    const nameMatch = section.match(/[^：\n]*：([^（\n]+)（([^）]+)）/);
     const name = nameMatch ? nameMatch[1]?.trim() : `分析中の歴史上の人物${i + 1}`;
     const years = nameMatch ? nameMatch[2]?.trim() : "生没年を分析中";
 
@@ -312,24 +313,22 @@ function extractReincarnations(content) {
 
     // 結論を抽出
     let conclusion = '';
-    const conclusionSection = section.split('▶︎')[1];
-    if (conclusionSection) {
-      const conclusionLines = conclusionSection.split('\n');
-      for (const line of conclusionLines) {
-        const trimmedLine = line.trim();
-        if (trimmedLine.startsWith('→')) {
-          conclusion = trimmedLine.substring(1).trim();
-          break;
-        }
-      }
+    const conclusionMatch = section.match(/▶︎[^→]*→\s*([^\n]+)/);
+    if (conclusionMatch) {
+      conclusion = conclusionMatch[1].trim();
     }
 
-    // 候補者情報を追加
+    // 候補者情報を追加（reasonsが空の場合は全文を1つの理由として扱う）
+    const sectionContent = section.split('『')[0].split('\n')
+      .filter(line => line.trim() && !line.includes('候補') && !line.includes('：'))
+      .join(' ').trim();
+
     reincarnations.push({
       name,
       years,
       quote: quote || "名言を分析中",
-      reasons: reasons.length > 0 ? reasons : ['この歴史上の人物の特徴を分析しています'],
+      reasons: reasons.length > 0 ? reasons :
+        sectionContent ? [sectionContent] : ['この歴史上の人物の特徴を分析しています'],
       conclusion: conclusion || '現代での活躍の可能性を分析しています'
     });
   }
@@ -345,6 +344,9 @@ function extractReincarnations(content) {
       conclusion: "現代での活躍の可能性を分析しています"
     });
   }
+
+  // デバッグ用ログ
+  console.log('Extracted reincarnations:', JSON.stringify(reincarnations, null, 2));
 
   // 最終的な結論を抽出
   let finalConclusion = '';
