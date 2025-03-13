@@ -6,26 +6,34 @@ const resultStore = new Map();
 
 // リトライ設定
 const MAX_RETRIES = 5;
-const RETRY_DELAY = 3000; // 3秒に延長
-const TIMEOUT = 60000; // 60秒に延長
+const RETRY_DELAY = 3000; // 3秒
+const TIMEOUT = 120000; // 120秒に延長
 
 // OpenAI API呼び出しの関数
 async function callOpenAIWithRetry(openai, messages, retryCount = 0) {
   try {
     console.log(`API call attempt ${retryCount + 1} started with ${TIMEOUT/1000}s timeout`);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT);
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      console.log('Request timeout, aborting...');
+    }, TIMEOUT);
 
-    const response = await openai.createChatCompletion({
-      model: "gpt-3.5-turbo",
-      messages: messages,
-      temperature: 0.7,
-      max_tokens: 2000
-    }, { signal: controller.signal });
+    try {
+      const response = await openai.createChatCompletion({
+        model: "gpt-3.5-turbo",
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 2000
+      }, { signal: controller.signal });
 
-    clearTimeout(timeoutId);
-    console.log(`API call attempt ${retryCount + 1} completed successfully`);
-    return response.data.choices[0].message.content;
+      clearTimeout(timeoutId);
+      console.log(`API call attempt ${retryCount + 1} completed successfully`);
+      return response.data.choices[0].message.content;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
+    }
   } catch (error) {
     console.error(`API call attempt ${retryCount + 1} failed:`, error.message);
     if (error.response) {
@@ -50,7 +58,9 @@ async function callOpenAIWithRetry(openai, messages, retryCount = 0) {
     }
 
     // 最大リトライ回数を超えた場合
-    if (error.response?.status === 429) {
+    if (error.name === 'AbortError' || error.code === 'ECONNABORTED') {
+      throw new Error("APIリクエストがタイムアウトしました。しばらく時間をおいてから再度お試しください。");
+    } else if (error.response?.status === 429) {
       throw new Error("APIのレート制限に達しました。しばらく時間をおいてから再度お試しください。");
     } else {
       console.error('Maximum retry attempts reached');
