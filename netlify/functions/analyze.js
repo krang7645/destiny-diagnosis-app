@@ -208,13 +208,13 @@ ${destinyData}
           }),
         };
       } else if (stage === 'pastlife') {
-        const reincarnations = extractReincarnations(content);
+        const result = extractReincarnations(content);
         return {
           statusCode: 200,
           headers,
           body: JSON.stringify({
             stage: 'pastlife',
-            reincarnations
+            ...result
           }),
         };
       }
@@ -249,50 +249,55 @@ ${destinyData}
 
 // 前世データから人物情報を抽出する関数
 function extractReincarnations(content) {
+  // 全体のテキストを取得
+  const fullText = content.trim();
+
+  // 候補を抽出
+  const candidates = fullText.split(/候補\d+：/).filter(Boolean);
+
   const reincarnations = [];
 
-  // 文章を段落に分割
-  const paragraphs = content.split('\n\n').filter(p => p.trim());
+  // 各候補から情報を抽出
+  for (let i = 0; i < candidates.length && i < 3; i++) {
+    const candidate = candidates[i];
 
-  // 各段落から人物情報を抽出
-  for (let i = 0; i < paragraphs.length; i++) {
-    const paragraph = paragraphs[i];
-
-    // 人物名と年代を抽出
-    const nameMatch = paragraph.match(/^(\d+\.|[①-③])\s*([^（\n]+)(?:（([^）]+)）)?/);
+    // 名前と年代を抽出
+    const nameMatch = candidate.match(/([^（\n]+)（([^）]+)）/);
     if (!nameMatch) continue;
 
-    const name = nameMatch[2]?.trim() || '不明';
-    const years = nameMatch[3]?.trim() || '不明';
+    const name = nameMatch[1]?.trim();
+    const years = nameMatch[2]?.trim();
 
-    // 理由を抽出（**で囲まれた部分を探す）
+    // 特徴を抽出
     const reasons = [];
-    const reasonMatches = paragraph.matchAll(/[•\*\-]\s+(?:\*\*([^*]+)\*\*|([^•\n]+))/g);
-    for (const match of reasonMatches) {
-      const reason = (match[1] || match[2])?.trim();
+    const reasonsText = candidate.split('→')[0];
+    const reasonLines = reasonsText.split('\n').filter(line => line.trim().startsWith('→'));
+
+    for (const line of reasonLines) {
+      const reason = line.replace('→', '').trim();
       if (reason) reasons.push(reason);
     }
 
-    // 結論を抽出（→ で始まる部分）
+    // 結論を抽出
     let conclusion = '';
-    const conclusionMatch = paragraph.match(/→\s*([^\n]+)/);
+    const conclusionMatch = candidate.match(/▶︎\s*生まれ変わり説アリ\n→\s*([^\n]+)/);
     if (conclusionMatch) {
-      conclusion = conclusionMatch[1]?.trim();
+      conclusion = conclusionMatch[1];
     }
 
-    if (name !== '不明') {
-      reincarnations.push({
-        name,
-        years,
-        reasons: reasons.length > 0 ? reasons : ['理由の詳細が解析中です'],
-        conclusion: conclusion || '結論を解析中です'
-      });
-    }
+    reincarnations.push({
+      name,
+      years,
+      reasons,
+      conclusion
+    });
   }
 
-  // 共通点の部分を除外（最後の段落を無視）
-  if (reincarnations.length > 3) {
-    reincarnations.length = 3;
+  // 最終的な結論を抽出
+  let finalConclusion = '';
+  const finalConclusionMatch = content.match(/結論：[^\n]*\n\n([\s\S]+)$/);
+  if (finalConclusionMatch) {
+    finalConclusion = finalConclusionMatch[1].trim();
   }
 
   // 3人に満たない場合は補完
@@ -300,15 +305,13 @@ function extractReincarnations(content) {
     reincarnations.push({
       name: `解析中の人物${reincarnations.length + 1}`,
       years: "年代解析中",
-      reasons: [
-        "解析中の特性1",
-        "解析中の特性2",
-        "解析中の特性3",
-        "解析中の特性4"
-      ],
+      reasons: ["解析中の特性"],
       conclusion: "解析中の結論"
     });
   }
 
-  return reincarnations;
+  return {
+    reincarnations,
+    finalConclusion
+  };
 }
