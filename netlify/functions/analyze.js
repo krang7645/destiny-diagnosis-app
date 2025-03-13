@@ -311,20 +311,14 @@ function extractReincarnations(content) {
 
       // 結論を抽出（転生予想）
       let conclusion = '';
-      const conclusionPart = section.split('▶︎')[1];
-      if (conclusionPart) {
-        const lines = conclusionPart
-          .split('\n')
-          .map(line => line.trim())
-          .filter(line => line.startsWith('→'));
-        if (lines.length > 0) {
-          conclusion = lines[0].replace(/^→\s*/, '');
-        }
+      const conclusionMatch = section.match(/▶︎[\s\S]*?→\s*([^\n]+)/);
+      if (conclusionMatch) {
+        conclusion = conclusionMatch[1].trim();
       }
 
       // 最終結論を抽出（改善版）
       let finalConclusion = '';
-      const finalConclusionMatch = content.match(/結論：([\s\S]+?)(?=$)/);
+      const finalConclusionMatch = section.match(/結論：([\s\S]*?)$/);
       if (finalConclusionMatch) {
         finalConclusion = finalConclusionMatch[1].trim();
       }
