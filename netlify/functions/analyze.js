@@ -285,114 +285,136 @@ ${destinyData}
 // 前世データから人物情報を抽出する関数を修正
 function extractReincarnations(content) {
   try {
-    // 全体のテキストを取得
+    console.log('Starting data extraction...');
     const fullText = content.trim();
-    console.log('Raw content:', fullText); // デバッグ用
+    console.log('Raw content length:', fullText.length);
+    console.log('Raw content preview:', fullText.substring(0, 200));
 
-    // 候補を抽出（改善版）
-    const sections = fullText.split(/(?=候補1：)/);
-    const section = sections[sections.length - 1]?.trim() || '';
-    console.log('Processing section:', section); // デバッグ用
+    // より柔軟なセクション分割
+    let section = '';
+    if (fullText.includes('候補1：')) {
+      section = fullText.split('候補1：')[1]?.trim() || '';
+    } else {
+      // 候補1：がない場合は全体を処理
+      section = fullText;
+    }
+    console.log('Section length:', section.length);
+    console.log('Section preview:', section.substring(0, 200));
 
-    if (!section || !section.includes('候補1：')) {
+    if (!section) {
       console.log('No valid section found');
       return {
         status: 'processing',
-        message: '前世の解析を続けています...'
+        message: '前世の解析を続けています...',
+        debug: { rawContent: fullText }
       };
     }
 
-    try {
-      // 名前と年代を抽出（改善版）
-      const nameMatch = section.match(/候補1：([^（\n]*[^（\s]*)[\s]*（([^）]+)）/);
-      const name = nameMatch ? nameMatch[1]?.trim() : null;
-      const years = nameMatch ? nameMatch[2]?.trim() : null;
-
-      // 名言を抽出（改善版）
-      let quote = '';
-      const quoteMatch = section.match(/『([^』]+)』/);
-      if (quoteMatch) {
-        quote = quoteMatch[1].trim();
+    // データ抽出の改善
+    const extractData = () => {
+      // 名前と年代の抽出（より柔軟なパターン）
+      let name = null;
+      let years = null;
+      const nameYearMatch = section.match(/([^（\n]*[^（\s]*)[\s]*[（(]([^）)]+)[）)]/);
+      if (nameYearMatch) {
+        name = nameYearMatch[1]?.trim();
+        years = nameYearMatch[2]?.trim();
       }
+      console.log('Extracted name:', name);
+      console.log('Extracted years:', years);
 
-      // 特徴（理由）を抽出（改善版）
-      const reasonsText = section.split('『')[0];
-      const reasons = reasonsText
-        .split('\n')
-        .filter(line => line.trim().startsWith('→'))
-        .map(line => line.trim().replace(/^→\s*/, ''));
-
-      // 結論を抽出（転生予想）（改善版）
-      let conclusion = '';
-      const reincarnationPart = section.split('▶︎ 生まれ変わり説アリ')[1];
-      if (reincarnationPart) {
-        const conclusionMatch = reincarnationPart.match(/→\s*([^\n]+)/);
-        if (conclusionMatch) {
-          conclusion = conclusionMatch[1].trim();
+      // 名言の抽出（複数のパターンに対応）
+      let quote = null;
+      const quotePatterns = [/『([^』]+)』/, /「([^」]+)」/, /"([^"]+)"/];
+      for (const pattern of quotePatterns) {
+        const match = section.match(pattern);
+        if (match) {
+          quote = match[1].trim();
+          break;
         }
       }
+      console.log('Extracted quote:', quote);
 
-      // 最終結論を抽出（改善版）
+      // 理由の抽出（改善版）
+      const reasons = section
+        .split(/\n/)
+        .filter(line => line.trim().startsWith('→'))
+        .map(line => line.trim().replace(/^→\s*/, ''));
+      console.log('Extracted reasons:', reasons);
+
+      // 結論の抽出（より柔軟なパターン）
+      let conclusion = '';
+      const conclusionPatterns = [
+        /生まれ変わり説アリ[^→]*→\s*([^\n]+)/,
+        /現代での活躍予想[：:]\s*([^\n]+)/,
+        /現代に転生していたら[^→]*→\s*([^\n]+)/
+      ];
+      for (const pattern of conclusionPatterns) {
+        const match = section.match(pattern);
+        if (match) {
+          conclusion = match[1].trim();
+          break;
+        }
+      }
+      console.log('Extracted conclusion:', conclusion);
+
+      // 最終結論の抽出（より柔軟なパターン）
       let finalConclusion = '';
-      const finalConclusionMatch = section.match(/結論：([^]*?)(?=$|\n\n)/);
-      if (finalConclusionMatch) {
-        finalConclusion = finalConclusionMatch[1].trim();
+      const finalConclusionPatterns = [
+        /結論：([^]*?)(?=$|\n\n)/,
+        /総括：([^]*?)(?=$|\n\n)/,
+        /まとめ：([^]*?)(?=$|\n\n)/
+      ];
+      for (const pattern of finalConclusionPatterns) {
+        const match = section.match(pattern);
+        if (match) {
+          finalConclusion = match[1].trim();
+          break;
+        }
       }
+      console.log('Extracted finalConclusion:', finalConclusion);
 
-      // デバッグログを追加
-      console.log('Extracted data:', {
-        name,
-        years,
-        quote,
-        reasons,
-        conclusion,
-        finalConclusion
-      });
+      return { name, years, quote, reasons, conclusion, finalConclusion };
+    };
 
-      // 必要なデータが揃っているか確認（改善版）
-      const validation = {
-        hasName: !!name,
-        hasYears: !!years,
-        reasonCount: reasons.length,
-        hasConclusion: !!conclusion,
-        hasFinalConclusion: !!finalConclusion
-      };
+    const extractedData = extractData();
+    console.log('Full extracted data:', extractedData);
 
-      console.log('Validation results:', validation);
+    // データの検証
+    const validation = {
+      hasName: !!extractedData.name,
+      hasYears: !!extractedData.years,
+      hasQuote: !!extractedData.quote,
+      reasonCount: extractedData.reasons.length,
+      hasConclusion: !!extractedData.conclusion,
+      hasFinalConclusion: !!extractedData.finalConclusion
+    };
+    console.log('Validation results:', validation);
 
-      if (!name || !years || reasons.length < 3 || !conclusion || !finalConclusion) {
-        return {
-          status: 'processing',
-          message: '前世の解析を続けています...',
-          debug: validation
-        };
-      }
-
-      // 結果を返す
-      const result = {
-        reincarnations: [{
-          name,
-          years,
-          quote: quote || null,
-          reasons: reasons.slice(0, 3),
-          conclusion
-        }],
-        finalConclusion,
-        status: 'complete'
-      };
-
-      console.log('Returning result:', JSON.stringify(result, null, 2));
-      return result;
-
-    } catch (error) {
-      console.error('Error processing section:', error);
+    // 必要最小限のデータが揃っているか確認
+    if (!extractedData.name || !extractedData.years) {
       return {
         status: 'processing',
-        message: '前世の解析中にエラーが発生しました。再試行しています...',
-        error: error.message,
-        content: section
+        message: '前世の解析を続けています...',
+        debug: { validation, section: section.substring(0, 200) }
       };
     }
+
+    // 結果の整形
+    const result = {
+      reincarnations: [{
+        name: extractedData.name,
+        years: extractedData.years,
+        quote: extractedData.quote || null,
+        reasons: extractedData.reasons.length > 0 ? extractedData.reasons : ['解析中...'],
+        conclusion: extractedData.conclusion || '解析中...'
+      }],
+      finalConclusion: extractedData.finalConclusion || '解析中...',
+      status: 'complete'
+    };
+
+    console.log('Final result:', JSON.stringify(result, null, 2));
+    return result;
 
   } catch (error) {
     console.error('Error in extractReincarnations:', error);
@@ -400,7 +422,7 @@ function extractReincarnations(content) {
       status: 'processing',
       message: '前世の解析中にエラーが発生しました。再試行しています...',
       error: error.message,
-      content: fullText
+      debug: { content: content.substring(0, 200) }
     };
   }
 }
