@@ -290,69 +290,82 @@ function extractReincarnations(content) {
     console.log(`\nProcessing section ${i + 1}:`, section); // デバッグ用
 
     try {
-      // 名前と年代を抽出
-      const nameMatch = section.match(/候補\d+：([^（\n]+)（([^）]+)）/);
+      // 名前と年代を抽出（より柔軟なパターンマッチング）
+      const nameMatch = section.match(/候補\d+：([^（\n]*[^（\s])[\s]*（([^）]+)）/);
       const name = nameMatch ? nameMatch[1]?.trim() : `分析中の歴史上の人物${i + 1}`;
       const years = nameMatch ? nameMatch[2]?.trim() : "生没年を分析中";
 
-      // 名言を抽出
+      // 名言を抽出（改行を含む可能性を考慮）
       let quote = '';
-      const quoteMatch = section.match(/『([^』]+)』/);
+      const quoteMatch = section.match(/『([\s\S]*?)』/);
       if (quoteMatch) {
         quote = quoteMatch[1].trim();
       }
 
       // 特徴（理由）を抽出
-      const reasons = [];
-      const reasonLines = section
-        .split(/[『▶︎]/) // 名言または結論の前で分割
-        [0] // 最初の部分（理由を含む部分）を取得
+      let reasons = [];
+      const reasonSection = section.split(/[『▶︎]/)[0]; // 名言または結論の前までを取得
+
+      // 矢印で始まる行を抽出
+      const arrowReasons = reasonSection
         .split('\n')
-        .filter(line => line.trim() && !line.includes('候補') && !line.includes('：'));
+        .filter(line => line.trim().startsWith('→'))
+        .map(line => line.trim().replace(/^→\s*/, ''));
 
-      // 理由を処理
-      let processedReasons = [];
-      if (reasonLines.length > 0) {
-        // 矢印で始まる行を優先
-        const arrowReasons = reasonLines
-          .filter(line => line.trim().startsWith('→'))
-          .map(line => line.trim().replace(/^→\s*/, ''));
-
-        // 矢印がない場合は通常のテキストを使用
-        if (arrowReasons.length > 0) {
-          processedReasons = arrowReasons;
-        } else {
-          const combinedText = reasonLines.join(' ');
-          processedReasons = combinedText
-            .split(/(?<=。)/)
-            .filter(Boolean)
-            .map(text => text.trim());
-        }
+      if (arrowReasons.length > 0) {
+        reasons = arrowReasons;
+      } else {
+        // 矢印がない場合は、候補行と空行を除いた有意な行を抽出
+        reasons = reasonSection
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line =>
+            line &&
+            !line.includes('候補') &&
+            !line.includes('：') &&
+            !line.includes('⸻') &&
+            line.length > 5
+          );
       }
 
-      // 3つの理由を確保
-      while (processedReasons.length < 3) {
-        processedReasons.push(`${name}の特徴を分析中です`);
+      // 理由が3つになるように調整
+      while (reasons.length < 3) {
+        reasons.push(`${name}の重要な特徴を分析しています`);
       }
-      processedReasons = processedReasons.slice(0, 3);
+      reasons = reasons.slice(0, 3);
 
-      // 結論を抽出
+      // 結論を抽出（改良版）
       let conclusion = '';
       const conclusionPart = section.split('▶︎')[1];
       if (conclusionPart) {
-        const conclusionMatch = conclusionPart.match(/→\s*([^\n]+)/);
-        if (conclusionMatch) {
-          conclusion = conclusionMatch[1].trim();
+        // まず矢印付きの行を探す
+        const arrowMatch = conclusionPart.match(/→\s*([^\n]+)/);
+        if (arrowMatch) {
+          conclusion = arrowMatch[1].trim();
+        } else {
+          // 矢印がない場合は最初の有意な行を使用
+          const lines = conclusionPart
+            .split('\n')
+            .map(line => line.trim())
+            .filter(line => line && !line.includes('⸻'));
+          if (lines.length > 0) {
+            conclusion = lines[0];
+          }
         }
+      }
+
+      // デフォルトの結論を設定
+      if (!conclusion) {
+        conclusion = `もし魂が現代に転生していたら、${name}の才能と経験を活かして新しい分野で活躍するでしょう。`;
       }
 
       // 候補者情報を追加
       reincarnations.push({
         name,
         years,
-        quote: quote || "名言を分析中",
-        reasons: processedReasons,
-        conclusion: conclusion || '現代での活躍の可能性を分析しています'
+        quote: quote || `${name}の言葉を分析中です`,
+        reasons,
+        conclusion
       });
 
     } catch (error) {
@@ -361,13 +374,13 @@ function extractReincarnations(content) {
       reincarnations.push({
         name: `分析中の歴史上の人物${i + 1}`,
         years: "生没年を分析中",
-        quote: "名言を分析中",
+        quote: "歴史的な名言を分析中です",
         reasons: [
-          "この歴史上の人物の業績を分析しています",
-          "その人物の特徴や哲学を分析しています",
-          "共通点を分析しています"
+          "この歴史上の人物の重要な業績を分析しています",
+          "その人物の特徴的な哲学や思想を分析しています",
+          "現代への影響と共通点を分析しています"
         ],
-        conclusion: "現代での活躍の可能性を分析しています"
+        conclusion: "現代での活躍の可能性を詳しく分析しています"
       });
     }
   }
@@ -378,28 +391,28 @@ function extractReincarnations(content) {
     reincarnations.push({
       name: `分析中の歴史上の人物${index}`,
       years: "生没年を分析中",
-      quote: "名言を分析中",
+      quote: "歴史的な名言を分析中です",
       reasons: [
-        "この歴史上の人物の業績を分析しています",
-        "その人物の特徴や哲学を分析しています",
-        "共通点を分析しています"
+        "この歴史上の人物の重要な業績を分析しています",
+        "その人物の特徴的な哲学や思想を分析しています",
+        "現代への影響と共通点を分析しています"
       ],
-      conclusion: "現代での活躍の可能性を分析しています"
+      conclusion: "現代での活躍の可能性を詳しく分析しています"
     });
   }
 
   // デバッグ用ログ
   console.log('Extracted reincarnations:', JSON.stringify(reincarnations, null, 2));
 
-  // 最終的な結論を抽出
+  // 最終的な結論を抽出（改良版）
   let finalConclusion = '';
-  const finalConclusionMatch = content.match(/結論：\s*([^\n]+)/);
+  const finalConclusionMatch = content.match(/結論：\s*([\s\S]+?)(?=(?:\n\s*\n|\s*$))/);
   if (finalConclusionMatch) {
     finalConclusion = finalConclusionMatch[1].trim();
   }
 
   return {
     reincarnations,
-    finalConclusion: finalConclusion || '総合的な結論を分析中です'
+    finalConclusion: finalConclusion || '3人の歴史上の人物から見る共通点と総合的な結論を分析中です'
   };
 }
