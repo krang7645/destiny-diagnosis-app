@@ -176,15 +176,33 @@ MBTI: ${mbti}
 ${destinyData}
 
 上記の天命分析に基づいて、この人物の「前世」として考えられる歴史上の人物を3名診断してください。
+以下のフォーマットで、各候補者について詳しく解説してください：
 
-各人物について:
-1. 名前と生没年
-2. 前世である理由（太字付きの箇条書きで4点）
-3. 結論（→ で始まる一文）
+候補1：[職業・役割]・[人物名]（[生没年]）
 
-最後に、3人の共通点から総合的な前世の可能性について簡潔にまとめてください。
+『[有名な言葉や名言]』
 
-チャールズ・チャップリン、宮本武蔵、ピーター大帝の例のような詳細さとフォーマットで回答してください。
+→ [その人物が何をした人か、最も重要な業績や特徴]
+→ [その人物の生き方や哲学]
+→ [${name}さんとの共通点]
+
+▶︎ 生まれ変わり説アリ
+→ もし魂が現代に転生していたら、[現代での活躍予想]
+
+⸻
+
+候補2：[以下同様のフォーマット]
+
+このように、各候補者について：
+1. 職業や役割を含めた完全な名前と生没年
+2. その人物の有名な言葉や名言（ある場合）
+3. 3つの特徴（→ で始まる）
+4. 現代に転生した場合の予想
+
+最後に、3人の共通点から総合的な結論を示してください。
+結論は「結論：」で始まり、改行を入れて詳しく説明してください。
+
+回答は必ず上記のフォーマットに従い、各セクションを⸻（ダッシュ3つ）で区切ってください。
 `;
     }
 
@@ -252,8 +270,8 @@ function extractReincarnations(content) {
   // 全体のテキストを取得
   const fullText = content.trim();
 
-  // 候補を抽出
-  const sections = fullText.split(/\d+\.\s*-?\s*/).filter(Boolean);
+  // 候補を抽出（「候補X：」で分割）
+  const sections = fullText.split(/候補\d+：/).filter(Boolean);
 
   const reincarnations = [];
 
@@ -262,32 +280,33 @@ function extractReincarnations(content) {
     const section = sections[i];
 
     // 名前と年代を抽出
-    const nameMatch = section.match(/名前と生没年[:：]?\s*([^（\n]+)（([^）]+)）/);
+    const nameMatch = section.match(/([^（\n]+)（([^）]+)）/);
     if (!nameMatch) continue;
 
     const name = nameMatch[1]?.trim();
     const years = nameMatch[2]?.trim();
 
-    // 理由を抽出
-    const reasons = [];
-    const reasonSection = section.split(/理由[:：]/)[1];
-    if (reasonSection) {
-      const reasonLines = reasonSection.split('\n')
-        .map(line => line.trim())
-        .filter(line => line && line !== '理由:' && !line.startsWith('結論'));
+    // 名言を抽出
+    let quote = '';
+    const quoteMatch = section.match(/『([^』]+)』/);
+    if (quoteMatch) {
+      quote = quoteMatch[1].trim();
+    }
 
-      // 箇条書きの記号を削除して理由を追加
-      for (const line of reasonLines) {
-        const cleanedLine = line.replace(/^[•\-\*→]/, '').trim();
-        if (cleanedLine && !cleanedLine.includes('生まれ変わり説アリ')) {
-          reasons.push(cleanedLine);
-        }
+    // 特徴（理由）を抽出
+    const reasons = [];
+    const lines = section.split('\n');
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (trimmedLine.startsWith('→') && !trimmedLine.includes('生まれ変わり説アリ') && !trimmedLine.includes('もし魂が現代に')) {
+        const reason = trimmedLine.substring(1).trim();
+        if (reason) reasons.push(reason);
       }
     }
 
     // 結論を抽出
     let conclusion = '';
-    const conclusionMatch = section.match(/(?:▶︎\s*生まれ変わり説アリ|結論[:：])\s*\n*→?\s*([^\n]+)/);
+    const conclusionMatch = section.match(/▶︎\s*生まれ変わり説アリ\s*\n*→\s*([^\n]+)/);
     if (conclusionMatch) {
       conclusion = conclusionMatch[1].trim();
     }
@@ -296,6 +315,7 @@ function extractReincarnations(content) {
       reincarnations.push({
         name,
         years,
+        quote: quote || null,
         reasons: reasons.length > 0 ? reasons : ['前世の特徴を分析中です'],
         conclusion: conclusion || '結論を分析中です'
       });
@@ -304,7 +324,7 @@ function extractReincarnations(content) {
 
   // 最終的な結論を抽出
   let finalConclusion = '';
-  const finalConclusionMatch = content.match(/(?:結論：|総合的な結論：)[\s\S]*?\n\n([\s\S]+)$/);
+  const finalConclusionMatch = content.match(/結論：\s*\n+([\s\S]+?)(?:\n\s*$|$)/);
   if (finalConclusionMatch) {
     finalConclusion = finalConclusionMatch[1].trim();
   }
@@ -314,6 +334,7 @@ function extractReincarnations(content) {
     reincarnations.push({
       name: `分析中の歴史上の人物${reincarnations.length + 1}`,
       years: "生没年を特定中",
+      quote: null,
       reasons: ["前世の特徴を分析中です"],
       conclusion: "結論を導き出しています"
     });
