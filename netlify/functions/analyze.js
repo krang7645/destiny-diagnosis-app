@@ -6,24 +6,27 @@ const resultStore = new Map();
 
 // リトライ設定
 const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000; // 1秒
-const TIMEOUT = 10000; // 10秒
+const RETRY_DELAY = 2000; // 2秒に延長
+const TIMEOUT = 30000; // 30秒に延長
 
 // OpenAI API呼び出しの関数
 async function callOpenAIWithRetry(openai, messages, retryCount = 0) {
   try {
+    console.log(`API call attempt ${retryCount + 1} started`);
     const response = await Promise.race([
       openai.createChatCompletion({
         model: "gpt-3.5-turbo",
         messages: messages,
         temperature: 0.7,
-        max_tokens: 2000
+        max_tokens: 2000,
+        timeout: TIMEOUT // タイムアウト設定を追加
       }),
       new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('APIリクエストがタイムアウトしました')), TIMEOUT)
+        setTimeout(() => reject(new Error(`APIリクエストが${TIMEOUT/1000}秒でタイムアウトしました`)), TIMEOUT)
       )
     ]);
 
+    console.log(`API call attempt ${retryCount + 1} completed successfully`);
     return response.data.choices[0].message.content;
   } catch (error) {
     console.error(`API call attempt ${retryCount + 1} failed:`, error.message);
@@ -33,11 +36,15 @@ async function callOpenAIWithRetry(openai, messages, retryCount = 0) {
     }
 
     if (retryCount < MAX_RETRIES) {
-      console.log(`Retrying in ${RETRY_DELAY}ms...`);
-      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+      const nextRetryDelay = RETRY_DELAY * (retryCount + 1); // 指数バックオフ
+      console.log(`Retrying in ${nextRetryDelay}ms... (Attempt ${retryCount + 2}/${MAX_RETRIES + 1})`);
+      await new Promise(resolve => setTimeout(resolve, nextRetryDelay));
       return callOpenAIWithRetry(openai, messages, retryCount + 1);
     }
-    throw error;
+
+    // 最大リトライ回数を超えた場合
+    console.error('Maximum retry attempts reached');
+    throw new Error(`APIリクエストが${MAX_RETRIES + 1}回失敗しました: ${error.message}`);
   }
 }
 
