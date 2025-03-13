@@ -295,20 +295,28 @@ function extractReincarnations(content) {
 
     // 特徴（理由）を抽出
     const reasons = [];
-    const lines = section.split('\n');
+    const reasonsSection = section.split('▶︎')[0]; // 「▶︎」より前の部分を理由セクションとして扱う
+    const lines = reasonsSection.split('\n');
     for (const line of lines) {
       const trimmedLine = line.trim();
-      if (trimmedLine.startsWith('→') && !trimmedLine.includes('生まれ変わり説アリ') && !trimmedLine.includes('もし魂が現代に')) {
+      if (trimmedLine.startsWith('→')) {
         const reason = trimmedLine.substring(1).trim();
         if (reason) reasons.push(reason);
       }
     }
 
-    // 結論を抽出
+    // 結論を抽出（「▶︎ 生まれ変わり説アリ」の後の部分）
     let conclusion = '';
-    const conclusionMatch = section.match(/▶︎\s*生まれ変わり説アリ\s*\n*→\s*([^\n]+)/);
-    if (conclusionMatch) {
-      conclusion = conclusionMatch[1].trim();
+    const conclusionSection = section.split('▶︎')[1];
+    if (conclusionSection) {
+      const conclusionLines = conclusionSection.split('\n');
+      for (const line of conclusionLines) {
+        const trimmedLine = line.trim();
+        if (trimmedLine.startsWith('→')) {
+          conclusion = trimmedLine.substring(1).trim();
+          break;
+        }
+      }
     }
 
     if (name && years) {
@@ -317,7 +325,7 @@ function extractReincarnations(content) {
         years,
         quote: quote || null,
         reasons: reasons.length > 0 ? reasons : ['前世の特徴を分析中です'],
-        conclusion: conclusion || '結論を分析中です'
+        conclusion: conclusion || 'もし魂が現代に転生していたら、その才能を活かして新しい分野で活躍するでしょう。'
       });
     }
   }
@@ -336,7 +344,7 @@ function extractReincarnations(content) {
       years: "生没年を特定中",
       quote: null,
       reasons: ["前世の特徴を分析中です"],
-      conclusion: "結論を導き出しています"
+      conclusion: "もし魂が現代に転生していたら、その才能を活かして新しい分野で活躍するでしょう。"
     });
   }
 
