@@ -289,58 +289,52 @@ function extractReincarnations(content) {
     const fullText = content.trim();
     console.log('Raw content:', fullText); // デバッグ用
 
-    // 候補を抽出
-    const sections = fullText
-      .split(/(?=候補1：)/)
-      .filter(section =>
-        section.trim() &&
-        section.includes('候補') &&
-        section.includes('：')
-      );
-    console.log(`Found ${sections.length} valid sections`); // デバッグ用
+    // 候補を抽出（改善版）
+    const sections = fullText.split(/(?=候補1：)/);
+    const section = sections[sections.length - 1]?.trim() || '';
+    console.log('Processing section:', section); // デバッグ用
 
-    // セクションがない場合は処理中とみなす
-    if (sections.length < 1) {
-      console.log('No valid section found, returning processing status');
+    if (!section || !section.includes('候補1：')) {
+      console.log('No valid section found');
       return {
         status: 'processing',
         message: '前世の解析を続けています...'
       };
     }
 
-    const section = sections[0].trim();
-    console.log('Processing section:', section); // デバッグ用
-
     try {
-      // 名前と年代を抽出
-      const nameMatch = section.match(/候補1：([^（\n]*[^（\s])[\s]*（([^）]+)）/);
+      // 名前と年代を抽出（改善版）
+      const nameMatch = section.match(/候補1：([^（\n]*[^（\s]*)[\s]*（([^）]+)）/);
       const name = nameMatch ? nameMatch[1]?.trim() : null;
       const years = nameMatch ? nameMatch[2]?.trim() : null;
 
-      // 名言を抽出
+      // 名言を抽出（改善版）
       let quote = '';
-      const quoteMatch = section.match(/『([\s\S]*?)』/);
+      const quoteMatch = section.match(/『([^』]+)』/);
       if (quoteMatch) {
         quote = quoteMatch[1].trim();
       }
 
-      // 特徴（理由）を抽出
-      const reasonSection = section.split(/[『▶︎]/)[0];
-      const reasons = reasonSection
+      // 特徴（理由）を抽出（改善版）
+      const reasonsText = section.split('『')[0];
+      const reasons = reasonsText
         .split('\n')
         .filter(line => line.trim().startsWith('→'))
         .map(line => line.trim().replace(/^→\s*/, ''));
 
-      // 結論を抽出（転生予想）
+      // 結論を抽出（転生予想）（改善版）
       let conclusion = '';
-      const conclusionMatch = section.match(/▶︎[\s\S]*?→\s*([^\n]+)/);
-      if (conclusionMatch) {
-        conclusion = conclusionMatch[1].trim();
+      const reincarnationPart = section.split('▶︎ 生まれ変わり説アリ')[1];
+      if (reincarnationPart) {
+        const conclusionMatch = reincarnationPart.match(/→\s*([^\n]+)/);
+        if (conclusionMatch) {
+          conclusion = conclusionMatch[1].trim();
+        }
       }
 
       // 最終結論を抽出（改善版）
       let finalConclusion = '';
-      const finalConclusionMatch = section.match(/結論：([\s\S]*?)$/);
+      const finalConclusionMatch = section.match(/結論：([^]*?)(?=$|\n\n)/);
       if (finalConclusionMatch) {
         finalConclusion = finalConclusionMatch[1].trim();
       }
@@ -355,25 +349,22 @@ function extractReincarnations(content) {
         finalConclusion
       });
 
-      // 必要なデータが揃っているか確認
+      // 必要なデータが揃っているか確認（改善版）
+      const validation = {
+        hasName: !!name,
+        hasYears: !!years,
+        reasonCount: reasons.length,
+        hasConclusion: !!conclusion,
+        hasFinalConclusion: !!finalConclusion
+      };
+
+      console.log('Validation results:', validation);
+
       if (!name || !years || reasons.length < 3 || !conclusion || !finalConclusion) {
-        console.log('Missing required data:', {
-          hasName: !!name,
-          hasYears: !!years,
-          reasonCount: reasons.length,
-          hasConclusion: !!conclusion,
-          hasFinalConclusion: !!finalConclusion
-        });
         return {
           status: 'processing',
           message: '前世の解析を続けています...',
-          debug: {
-            hasName: !!name,
-            hasYears: !!years,
-            reasonCount: reasons.length,
-            hasConclusion: !!conclusion,
-            hasFinalConclusion: !!finalConclusion
-          }
+          debug: validation
         };
       }
 
@@ -398,7 +389,8 @@ function extractReincarnations(content) {
       return {
         status: 'processing',
         message: '前世の解析中にエラーが発生しました。再試行しています...',
-        error: error.message
+        error: error.message,
+        content: section
       };
     }
 
@@ -407,7 +399,8 @@ function extractReincarnations(content) {
     return {
       status: 'processing',
       message: '前世の解析中にエラーが発生しました。再試行しています...',
-      error: error.message
+      error: error.message,
+      content: fullText
     };
   }
 }
