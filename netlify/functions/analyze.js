@@ -252,8 +252,8 @@ function extractReincarnations(content) {
   // 全体のテキストを取得
   const fullText = content.trim();
 
-  // 候補を抽出
-  const candidates = fullText.split(/候補\d+：/).filter(Boolean);
+  // 候補を抽出（数字の後に：が続く形式で分割）
+  const candidates = fullText.split(/\d+：/).filter(Boolean);
 
   const reincarnations = [];
 
@@ -268,34 +268,38 @@ function extractReincarnations(content) {
     const name = nameMatch[1]?.trim();
     const years = nameMatch[2]?.trim();
 
-    // 特徴を抽出
+    // 特徴（理由）を抽出
     const reasons = [];
-    const reasonsText = candidate.split('→')[0];
-    const reasonLines = reasonsText.split('\n').filter(line => line.trim().startsWith('→'));
-
-    for (const line of reasonLines) {
-      const reason = line.replace('→', '').trim();
-      if (reason) reasons.push(reason);
+    const lines = candidate.split('\n');
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      // 「→」で始まる行を理由として抽出
+      if (trimmedLine.startsWith('→') && !trimmedLine.includes('生まれ変わり説アリ')) {
+        const reason = trimmedLine.replace('→', '').trim();
+        if (reason) reasons.push(reason);
+      }
     }
 
     // 結論を抽出
     let conclusion = '';
-    const conclusionMatch = candidate.match(/▶︎\s*生まれ変わり説アリ\n→\s*([^\n]+)/);
+    const conclusionMatch = candidate.match(/▶︎\s*生まれ変わり説アリ\s*\n*→\s*([^\n]+)/);
     if (conclusionMatch) {
-      conclusion = conclusionMatch[1];
+      conclusion = conclusionMatch[1].trim();
     }
 
-    reincarnations.push({
-      name,
-      years,
-      reasons,
-      conclusion
-    });
+    if (name && years) {
+      reincarnations.push({
+        name,
+        years,
+        reasons: reasons.length > 0 ? reasons : ['データ解析中'],
+        conclusion: conclusion || 'データ解析中'
+      });
+    }
   }
 
   // 最終的な結論を抽出
   let finalConclusion = '';
-  const finalConclusionMatch = content.match(/結論：[^\n]*\n\n([\s\S]+)$/);
+  const finalConclusionMatch = content.match(/結論：[\s\S]*?\n\n([\s\S]+)$/);
   if (finalConclusionMatch) {
     finalConclusion = finalConclusionMatch[1].trim();
   }
@@ -303,15 +307,15 @@ function extractReincarnations(content) {
   // 3人に満たない場合は補完
   while (reincarnations.length < 3) {
     reincarnations.push({
-      name: `解析中の人物${reincarnations.length + 1}`,
-      years: "年代解析中",
-      reasons: ["解析中の特性"],
-      conclusion: "解析中の結論"
+      name: `データ解析中の人物${reincarnations.length + 1}`,
+      years: "生没年解析中",
+      reasons: ["データを解析中です"],
+      conclusion: "結論を導き出しています"
     });
   }
 
   return {
     reincarnations,
-    finalConclusion
+    finalConclusion: finalConclusion || '最終結論を分析中です'
   };
 }
