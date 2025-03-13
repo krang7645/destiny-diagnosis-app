@@ -191,9 +191,8 @@ MBTI: ${mbti}
 
 小松竜之介（1990年07月31日、ESFP）の例に似た詳細さとフォーマットで回答してください。
 `;
-    } else if (stage === 'pastlife') {
-      console.log("Generating pastlife prompt");
-      // 第二段階: 前世診断（天命データを含める）
+    } else if (stage === 'pastlife1') {
+      console.log("Generating first pastlife prompt");
       const destinyData = data.destinyData || '';
       prompt = `
 名前: ${name}
@@ -203,7 +202,65 @@ MBTI: ${mbti}
 天命の診断結果:
 ${destinyData}
 
-上記の天命分析に基づいて、この人物の「前世」として最も可能性の高い歴史上の人物を1名診断してください。
+上記の天命分析に基づいて、この人物の「前世」として最も可能性の高い歴史上の指導者や政治家を1名診断してください。
+以下のフォーマットで詳しく解説してください：
+
+候補1：[職業・役割]・[人物名]（[生没年]）
+
+『[有名な言葉や名言]』
+
+→ [その人物が何をした人か、最も重要な業績や特徴]
+→ [その人物の生き方や哲学]
+→ [${name}さんとの共通点]
+
+▶︎ 生まれ変わり説アリ
+→ もし魂が現代に転生していたら、[現代での活躍予想]
+
+結論：[この人物が前世である理由と現代への示唆]
+
+回答は必ず上記のフォーマットに従い、矢印（→）を使って特徴を示してください。
+`;
+    } else if (stage === 'pastlife2') {
+      console.log("Generating second pastlife prompt");
+      const destinyData = data.destinyData || '';
+      prompt = `
+名前: ${name}
+生年月日: ${birthdate}
+MBTI: ${mbti}
+
+天命の診断結果:
+${destinyData}
+
+上記の天命分析に基づいて、この人物の「前世」として最も可能性の高い歴史上の芸術家や文化人を1名診断してください。
+以下のフォーマットで詳しく解説してください：
+
+候補1：[職業・役割]・[人物名]（[生没年]）
+
+『[有名な言葉や名言]』
+
+→ [その人物が何をした人か、最も重要な業績や特徴]
+→ [その人物の生き方や哲学]
+→ [${name}さんとの共通点]
+
+▶︎ 生まれ変わり説アリ
+→ もし魂が現代に転生していたら、[現代での活躍予想]
+
+結論：[この人物が前世である理由と現代への示唆]
+
+回答は必ず上記のフォーマットに従い、矢印（→）を使って特徴を示してください。
+`;
+    } else if (stage === 'pastlife3') {
+      console.log("Generating third pastlife prompt");
+      const destinyData = data.destinyData || '';
+      prompt = `
+名前: ${name}
+生年月日: ${birthdate}
+MBTI: ${mbti}
+
+天命の診断結果:
+${destinyData}
+
+上記の天命分析に基づいて、この人物の「前世」として最も可能性の高い歴史上の科学者や発明家を1名診断してください。
 以下のフォーマットで詳しく解説してください：
 
 候補1：[職業・役割]・[人物名]（[生没年]）
@@ -242,13 +299,13 @@ ${destinyData}
             result: content
           }),
         };
-      } else if (stage === 'pastlife') {
+      } else if (stage === 'pastlife1' || stage === 'pastlife2' || stage === 'pastlife3') {
         const result = extractReincarnations(content);
         return {
           statusCode: 200,
           headers,
           body: JSON.stringify({
-            stage: 'pastlife',
+            stage: stage,
             ...result
           }),
         };
