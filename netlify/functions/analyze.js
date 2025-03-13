@@ -191,19 +191,7 @@ MBTI: ${mbti}
 
 小松竜之介（1990年07月31日、ESFP）の例に似た詳細さとフォーマットで回答してください。
 `;
-    } else if (stage === 'pastlife') {
-      console.log("Converting 'pastlife' stage to 'pastlife1'");
-      const result = extractReincarnations(content);
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({
-          stage: 'pastlife1',
-          ...result,
-          nextStage: 'pastlife2'
-        }),
-      };
-    } else if (stage === 'pastlife1') {
+    } else if (stage === 'pastlife' || stage === 'pastlife1') {
       console.log("Generating first pastlife prompt");
       const destinyData = data.destinyData || '';
       prompt = `
@@ -311,8 +299,7 @@ ${destinyData}
             result: content
           }),
         };
-      } else if (stage === 'pastlife') {
-        console.log("Converting 'pastlife' stage to 'pastlife1'");
+      } else if (stage === 'pastlife' || stage === 'pastlife1') {
         const result = extractReincarnations(content);
         return {
           statusCode: 200,
@@ -323,17 +310,26 @@ ${destinyData}
             nextStage: 'pastlife2'
           }),
         };
-      } else if (stage === 'pastlife1' || stage === 'pastlife2' || stage === 'pastlife3') {
+      } else if (stage === 'pastlife2') {
         const result = extractReincarnations(content);
-        const nextStage = stage === 'pastlife1' ? 'pastlife2' :
-                         stage === 'pastlife2' ? 'pastlife3' : null;
         return {
           statusCode: 200,
           headers,
           body: JSON.stringify({
-            stage: stage,
+            stage: 'pastlife2',
             ...result,
-            nextStage
+            nextStage: 'pastlife3'
+          }),
+        };
+      } else if (stage === 'pastlife3') {
+        const result = extractReincarnations(content);
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            stage: 'pastlife3',
+            ...result,
+            nextStage: null
           }),
         };
       }
