@@ -181,9 +181,8 @@ MBTI: ${mbti}
 天命の診断結果:
 ${destinyData}
 
-上記の天命分析に基づいて、この人物の「前世」として考えられる歴史上の人物を3名診断してください。
-以下のフォーマットで、各候補者について詳しく解説してください。
-必ず3名の候補者を挙げてください。2名や1名では不十分です：
+上記の天命分析に基づいて、この人物の「前世」として最も可能性の高い歴史上の人物を1名診断してください。
+以下のフォーマットで詳しく解説してください：
 
 候補1：[職業・役割]・[人物名]（[生没年]）
 
@@ -196,25 +195,9 @@ ${destinyData}
 ▶︎ 生まれ変わり説アリ
 → もし魂が現代に転生していたら、[現代での活躍予想]
 
-⸻
+結論：[この人物が前世である理由と現代への示唆]
 
-候補2：[以下同様のフォーマット]
-
-⸻
-
-候補3：[以下同様のフォーマット]
-
-このように、各候補者について：
-1. 職業や役割を含めた完全な名前と生没年
-2. その人物の有名な言葉や名言（ある場合）
-3. 3つの特徴（→ で始まる）
-4. 現代に転生した場合の予想
-
-最後に、3人の共通点から総合的な結論を示してください。
-結論は「結論：」で始まり、改行を入れて詳しく説明してください。
-
-回答は必ず上記のフォーマットに従い、各セクションを⸻（ダッシュ3つ）で区切ってください。
-必ず3名の候補者を挙げ、それぞれの情報を詳しく記載してください。
+回答は必ず上記のフォーマットに従い、矢印（→）を使って特徴を示してください。
 `;
     }
 
@@ -284,9 +267,9 @@ function extractReincarnations(content) {
     const fullText = content.trim();
     console.log('Raw content:', fullText); // デバッグ用
 
-    // 候補を抽出（「候補X：」で分割）
+    // 候補を抽出
     const sections = fullText
-      .split(/(?=候補[1-3]：)/)
+      .split(/(?=候補1：)/)
       .filter(section =>
         section.trim() &&
         section.includes('候補') &&
@@ -294,142 +277,85 @@ function extractReincarnations(content) {
       );
     console.log(`Found ${sections.length} valid sections`); // デバッグ用
 
-    // セクションが3つない場合は処理中とみなす
-    if (sections.length < 3) {
-      console.log('Not enough valid sections found, returning processing status');
+    // セクションがない場合は処理中とみなす
+    if (sections.length < 1) {
+      console.log('No valid section found, returning processing status');
       return {
         status: 'processing',
         message: '前世の解析を続けています...'
       };
     }
 
-    const reincarnations = [];
-    let isProcessing = false;
+    const section = sections[0].trim();
+    console.log('Processing section:', section); // デバッグ用
 
-    // 各セクションから情報を抽出
-    for (let i = 0; i < sections.length; i++) {
-      const section = sections[i].trim();
-      console.log(`\nProcessing section ${i + 1}:`, section); // デバッグ用
+    try {
+      // 名前と年代を抽出
+      const nameMatch = section.match(/候補1：([^（\n]*[^（\s])[\s]*（([^）]+)）/);
+      const name = nameMatch ? nameMatch[1]?.trim() : null;
+      const years = nameMatch ? nameMatch[2]?.trim() : null;
 
-      try {
-        // 名前と年代を抽出（より柔軟なパターンマッチング）
-        const nameMatch = section.match(/候補[1-3]：([^（\n]*[^（\s])[\s]*（([^）]+)）/);
-        const name = nameMatch ? nameMatch[1]?.trim() : null;
-        const years = nameMatch ? nameMatch[2]?.trim() : null;
+      // 名言を抽出
+      let quote = '';
+      const quoteMatch = section.match(/『([\s\S]*?)』/);
+      if (quoteMatch) {
+        quote = quoteMatch[1].trim();
+      }
 
-        // 必須データが欠けている場合は処理中とみなす
-        if (!name || !years) {
-          console.log(`Missing required data in section ${i + 1}`);
-          isProcessing = true;
-          continue;
+      // 特徴（理由）を抽出
+      const reasonSection = section.split(/[『▶︎]/)[0];
+      const reasons = reasonSection
+        .split('\n')
+        .filter(line => line.trim().startsWith('→'))
+        .map(line => line.trim().replace(/^→\s*/, ''));
+
+      // 結論を抽出
+      let conclusion = '';
+      const conclusionPart = section.split('▶︎')[1];
+      if (conclusionPart) {
+        const arrowMatch = conclusionPart.match(/→\s*([^\n]+)/);
+        if (arrowMatch) {
+          conclusion = arrowMatch[1].trim();
         }
+      }
 
-        // 名言を抽出（改行を含む可能性を考慮）
-        let quote = '';
-        const quoteMatch = section.match(/『([\s\S]*?)』/);
-        if (quoteMatch) {
-          quote = quoteMatch[1].trim();
-        }
+      // 最終結論を抽出
+      let finalConclusion = '';
+      const finalConclusionMatch = content.match(/結論：\s*([^\n]+)/);
+      if (finalConclusionMatch) {
+        finalConclusion = finalConclusionMatch[1].trim();
+      }
 
-        // 特徴（理由）を抽出
-        let reasons = [];
-        const reasonSection = section.split(/[『▶︎]/)[0]; // 名言または結論の前までを取得
+      // 必要なデータが揃っているか確認
+      if (!name || !years || reasons.length < 3 || !conclusion || !finalConclusion) {
+        console.log('Missing required data');
+        return {
+          status: 'processing',
+          message: '前世の解析を続けています...'
+        };
+      }
 
-        // 矢印で始まる行を抽出
-        const arrowReasons = reasonSection
-          .split('\n')
-          .filter(line => line.trim().startsWith('→'))
-          .map(line => line.trim().replace(/^→\s*/, ''));
-
-        if (arrowReasons.length > 0) {
-          reasons = arrowReasons;
-        } else {
-          // 矢印がない場合は、候補行と空行を除いた有意な行を抽出
-          reasons = reasonSection
-            .split('\n')
-            .map(line => line.trim())
-            .filter(line =>
-              line &&
-              !line.includes('候補') &&
-              !line.includes('：') &&
-              !line.includes('⸻') &&
-              line.length > 5
-            );
-        }
-
-        // 理由が3つない場合は処理中とみなす
-        if (reasons.length < 3) {
-          console.log(`Not enough reasons in section ${i + 1}: ${reasons.length} found`);
-          isProcessing = true;
-        }
-
-        // 結論を抽出（改良版）
-        let conclusion = '';
-        const conclusionPart = section.split('▶︎')[1];
-        if (conclusionPart) {
-          // まず矢印付きの行を探す
-          const arrowMatch = conclusionPart.match(/→\s*([^\n]+)/);
-          if (arrowMatch) {
-            conclusion = arrowMatch[1].trim();
-          } else {
-            // 矢印がない場合は最初の有意な行を使用
-            const lines = conclusionPart
-              .split('\n')
-              .map(line => line.trim())
-              .filter(line => line && !line.includes('⸻'));
-            if (lines.length > 0) {
-              conclusion = lines[0];
-            }
-          }
-        }
-
-        // 結論がない場合は処理中とみなす
-        if (!conclusion) {
-          console.log(`No conclusion found in section ${i + 1}`);
-          isProcessing = true;
-        }
-
-        // 候補者情報を追加
-        reincarnations.push({
+      // 結果を返す
+      return {
+        reincarnations: [{
           name,
           years,
           quote: quote || null,
           reasons: reasons.slice(0, 3),
-          conclusion: conclusion || null
-        });
+          conclusion
+        }],
+        finalConclusion,
+        status: 'complete'
+      };
 
-      } catch (error) {
-        console.error(`Error processing section ${i + 1}:`, error);
-        isProcessing = true;
-      }
-    }
-
-    // 最終的な結論を抽出（改良版）
-    let finalConclusion = '';
-    const finalConclusionMatch = content.match(/結論：\s*([\s\S]+?)(?=(?:\n\s*\n|\s*$))/);
-    if (finalConclusionMatch) {
-      finalConclusion = finalConclusionMatch[1].trim();
-    }
-
-    // 必要な情報が揃っていない場合は処理中を返す
-    if (isProcessing || reincarnations.length < 3 || !finalConclusion) {
-      console.log('Missing required data:', {
-        isProcessing,
-        reincarnationsLength: reincarnations.length,
-        hasFinalConclusion: !!finalConclusion
-      });
+    } catch (error) {
+      console.error('Error processing section:', error);
       return {
         status: 'processing',
-        message: '前世の解析を続けています...'
+        message: '前世の解析中にエラーが発生しました。再試行しています...'
       };
     }
 
-    // すべての情報が揃っている場合のみ結果を返す
-    return {
-      reincarnations,
-      finalConclusion,
-      status: 'complete'
-    };
   } catch (error) {
     console.error('Error in extractReincarnations:', error);
     return {
