@@ -356,12 +356,19 @@ function extractReincarnations(content) {
         });
         return {
           status: 'processing',
-          message: '前世の解析を続けています...'
+          message: '前世の解析を続けています...',
+          debug: {
+            hasName: !!name,
+            hasYears: !!years,
+            reasonCount: reasons.length,
+            hasConclusion: !!conclusion,
+            hasFinalConclusion: !!finalConclusion
+          }
         };
       }
 
       // 結果を返す
-      return {
+      const result = {
         reincarnations: [{
           name,
           years,
@@ -373,11 +380,15 @@ function extractReincarnations(content) {
         status: 'complete'
       };
 
+      console.log('Returning result:', JSON.stringify(result, null, 2));
+      return result;
+
     } catch (error) {
       console.error('Error processing section:', error);
       return {
         status: 'processing',
-        message: '前世の解析中にエラーが発生しました。再試行しています...'
+        message: '前世の解析中にエラーが発生しました。再試行しています...',
+        error: error.message
       };
     }
 
@@ -385,7 +396,8 @@ function extractReincarnations(content) {
     console.error('Error in extractReincarnations:', error);
     return {
       status: 'processing',
-      message: '前世の解析中にエラーが発生しました。再試行しています...'
+      message: '前世の解析中にエラーが発生しました。再試行しています...',
+      error: error.message
     };
   }
 }
