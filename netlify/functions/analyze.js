@@ -1,5 +1,8 @@
 const { Configuration, OpenAIApi } = require("openai");
 
+// 結果を一時的に保存するためのMap
+const resultStore = new Map();
+
 exports.handler = async function(event, context) {
   console.log("Function started - Request received");
 
@@ -7,7 +10,7 @@ exports.handler = async function(event, context) {
   const headers = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
     "Content-Type": "application/json"
   };
 
@@ -18,6 +21,43 @@ exports.handler = async function(event, context) {
       statusCode: 200,
       headers,
       body: JSON.stringify({ message: "Successful preflight call" }),
+    };
+  }
+
+  // GETリクエストの場合、結果を取得
+  if (event.httpMethod === "GET") {
+    const resultId = event.queryStringParameters?.resultId;
+    if (!resultId) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: "結果IDが指定されていません" }),
+      };
+    }
+
+    const result = resultStore.get(resultId);
+    if (!result) {
+      return {
+        statusCode: 404,
+        headers,
+        body: JSON.stringify({ error: "指定された結果が見つかりません" }),
+      };
+    }
+
+    if (result.status === "processing") {
+      return {
+        statusCode: 202,
+        headers,
+        body: JSON.stringify({ status: "processing" }),
+      };
+    }
+
+    // 結果が完了している場合、結果を返して保存データを削除
+    resultStore.delete(resultId);
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify(result),
     };
   }
 
@@ -33,12 +73,10 @@ exports.handler = async function(event, context) {
 
   try {
     console.log("Parsing request body");
-    // リクエストボディからデータを取得
     const data = JSON.parse(event.body);
     const { name, birthdate, mbti, stage } = data;
     console.log(`Received data - Name: ${name}, Birthdate: ${birthdate}, MBTI: ${mbti}, Stage: ${stage}`);
 
-    // バリデーション
     if (!name || !birthdate || !mbti) {
       console.log("Validation failed - Missing required parameters");
       return {
@@ -48,7 +86,6 @@ exports.handler = async function(event, context) {
       };
     }
 
-    // OpenAI API設定
     console.log("Configuring OpenAI API");
     const configuration = new Configuration({
       apiKey: process.env.OPENAI_API_KEY,
@@ -66,12 +103,20 @@ exports.handler = async function(event, context) {
     const openai = new OpenAIApi(configuration);
     console.log("OpenAI API configured successfully");
 
-    // ステージに応じたプロンプト生成
-    let prompt = '';
-    if (stage === 'destiny' || !stage) {
-      console.log("Generating destiny prompt");
-      // 第一段階: 天命診断
-      prompt = `
+    // 結果IDを生成
+    const resultId = Date.now().toString();
+
+    // 初期状態を保存
+    resultStore.set(resultId, { status: "processing" });
+
+    // プロンプト生成とAPI呼び出しを非同期で実行
+    (async () => {
+      try {
+        let prompt = '';
+        if (stage === 'destiny' || !stage) {
+          console.log("Generating destiny prompt");
+          // 第一段階: 天命診断
+          prompt = `
 名前: ${name}
 生年月日: ${birthdate}
 MBTI: ${mbti}
@@ -89,11 +134,11 @@ MBTI: ${mbti}
 
 小松竜之介（1990年07月31日、ESFP）の例に似た詳細さとフォーマットで回答してください。
 `;
-    } else if (stage === 'pastlife') {
-      console.log("Generating pastlife prompt");
-      // 第二段階: 前世診断（天命データを含める）
-      const destinyData = data.destinyData || '';
-      prompt = `
+        } else if (stage === 'pastlife') {
+          console.log("Generating pastlife prompt");
+          // 第二段階: 前世診断（天命データを含める）
+          const destinyData = data.destinyData || '';
+          prompt = `
 名前: ${name}
 生年月日: ${birthdate}
 MBTI: ${mbti}
@@ -112,12 +157,9 @@ ${destinyData}
 
 チャールズ・チャップリン、宮本武蔵、ピーター大帝の例のような詳細さとフォーマットで回答してください。
 `;
-    }
+        }
 
-    // OpenAI API呼び出しを非同期で行う
-    const getOpenAIResponse = async () => {
-      console.log("Starting OpenAI API call");
-      try {
+        console.log("Starting OpenAI API call");
         const response = await openai.createChatCompletion({
           model: "gpt-3.5-turbo",
           messages: [
@@ -127,71 +169,43 @@ ${destinyData}
           temperature: 0.7,
           max_tokens: 1000
         });
+
+        const content = response.data.choices[0].message.content;
         console.log("OpenAI API call completed successfully");
-        return response.data.choices[0].message.content;
-      } catch (error) {
-        console.error("OpenAI API call failed:", error);
-        throw error;
-      }
-    };
 
-    // 非同期処理の開始
-    console.log("Starting async processing");
-    getOpenAIResponse()
-      .then(content => {
-        console.log("Processing OpenAI response");
-        // 結果ID
-        const resultId = Date.now().toString();
-
-        // ステージに応じた結果を返す
+        // 結果を保存
         if (stage === 'destiny' || !stage) {
-          console.log("Returning destiny analysis result");
-          return {
-            statusCode: 200,
-            headers,
-            body: JSON.stringify({
-              stage: 'destiny',
-              result: content,
-              resultId
-            }),
-          };
+          resultStore.set(resultId, {
+            status: "completed",
+            stage: 'destiny',
+            result: content
+          });
         } else if (stage === 'pastlife') {
-          console.log("Processing pastlife analysis");
-          // 前世データを解析して構造化
           const reincarnations = extractReincarnations(content);
-          console.log("Returning pastlife analysis result");
-          return {
-            statusCode: 200,
-            headers,
-            body: JSON.stringify({
-              stage: 'pastlife',
-              reincarnations,
-              resultId
-            }),
-          };
+          resultStore.set(resultId, {
+            status: "completed",
+            stage: 'pastlife',
+            reincarnations
+          });
         }
-      })
-      .catch(error => {
+      } catch (error) {
         console.error("Error in async processing:", error);
-        return {
-          statusCode: 500,
-          headers,
-          body: JSON.stringify({
-            error: "診断処理中にエラーが発生しました",
-            message: error.message,
-            stack: error.stack
-          }),
-        };
-      });
+        resultStore.set(resultId, {
+          status: "error",
+          error: "診断処理中にエラーが発生しました",
+          message: error.message
+        });
+      }
+    })();
 
-    console.log("Returning initial response");
-    // 処理中のメッセージを即座に返す
+    // 即座に結果IDを返す
     return {
       statusCode: 202,
       headers,
       body: JSON.stringify({
-        message: "診断を処理中です。結果が準備でき次第、通知されます。",
-        status: "processing"
+        resultId,
+        status: "processing",
+        message: "診断を処理中です。結果が準備でき次第、通知されます。"
       }),
     };
 
@@ -202,8 +216,7 @@ ${destinyData}
       headers,
       body: JSON.stringify({
         error: "予期せぬエラーが発生しました",
-        message: error.message,
-        stack: error.stack
+        message: error.message
       }),
     };
   }
