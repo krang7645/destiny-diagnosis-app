@@ -340,11 +340,15 @@ function extractReincarnations(content) {
   // 3人に満たない場合は補完
   while (reincarnations.length < 3) {
     reincarnations.push({
-      name: `分析中の歴史上の人物${reincarnations.length + 1}`,
-      years: "生没年を特定中",
-      quote: null,
-      reasons: ["前世の特徴を分析中です"],
-      conclusion: "もし魂が現代に転生していたら、その才能を活かして新しい分野で活躍するでしょう。"
+      name: `偉大な歴史上の人物`,
+      years: "詳細を分析中",
+      quote: "「人生における重要な教訓や知恵の言葉」",
+      reasons: [
+        "その時代において重要な功績を残した人物",
+        "現代にも通じる普遍的な価値観を持っていた",
+        "あなたと共通する特徴や才能の持ち主"
+      ],
+      conclusion: "現代に転生した場合、革新的なアイデアと強い信念で新しい価値を創造する人物として活躍するでしょう"
     });
   }
 
