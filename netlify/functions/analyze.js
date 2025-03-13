@@ -251,49 +251,64 @@ ${destinyData}
 function extractReincarnations(content) {
   const reincarnations = [];
 
-  // 人物ごとのパターンを検索（改行を含む）
-  const personRegex = /\d+\.\s+(.*?)（(.*?)）[\s\S]*?(?=\d+\.|\s*$)/g;
-  const matches = content.matchAll(personRegex);
+  // 文章を段落に分割
+  const paragraphs = content.split('\n\n').filter(p => p.trim());
 
-  for (const match of Array.from(matches)) {
-    // 人物のテキスト全体
-    const personText = match[0];
+  // 各段落から人物情報を抽出
+  for (let i = 0; i < paragraphs.length; i++) {
+    const paragraph = paragraphs[i];
 
-    // 名前と年
-    const name = match[1]?.trim() || '不明';
-    const years = match[2]?.trim() || '不明';
+    // 人物名と年代を抽出
+    const nameMatch = paragraph.match(/^(\d+\.|[①-③])\s*([^（\n]+)(?:（([^）]+)）)?/);
+    if (!nameMatch) continue;
 
-    // 理由を抽出
-    const reasonsRegex = /[•\*\-]\s+(.*?)(?=\n[•\*\-]|\n→|\s*$)/g;
-    const reasonsMatches = personText.matchAll(reasonsRegex);
-    const reasons = Array.from(reasonsMatches).map(m => m[1]?.trim() || '').filter(r => r);
+    const name = nameMatch[2]?.trim() || '不明';
+    const years = nameMatch[3]?.trim() || '不明';
 
-    // 結論を抽出
-    const conclusionMatch = personText.match(/→\s+(.*?)(?=\s*$|\n)/);
-    const conclusion = conclusionMatch ? conclusionMatch[1]?.trim() : '';
+    // 理由を抽出（**で囲まれた部分を探す）
+    const reasons = [];
+    const reasonMatches = paragraph.matchAll(/[•\*\-]\s+(?:\*\*([^*]+)\*\*|([^•\n]+))/g);
+    for (const match of reasonMatches) {
+      const reason = (match[1] || match[2])?.trim();
+      if (reason) reasons.push(reason);
+    }
 
-    reincarnations.push({
-      name,
-      years,
-      reasons: reasons.length > 0 ? reasons : ['理由の詳細が不明です'],
-      conclusion: conclusion || '結論が見つかりませんでした'
-    });
+    // 結論を抽出（→ で始まる部分）
+    let conclusion = '';
+    const conclusionMatch = paragraph.match(/→\s*([^\n]+)/);
+    if (conclusionMatch) {
+      conclusion = conclusionMatch[1]?.trim();
+    }
+
+    if (name !== '不明') {
+      reincarnations.push({
+        name,
+        years,
+        reasons: reasons.length > 0 ? reasons : ['理由の詳細が解析中です'],
+        conclusion: conclusion || '結論を解析中です'
+      });
+    }
+  }
+
+  // 共通点の部分を除外（最後の段落を無視）
+  if (reincarnations.length > 3) {
+    reincarnations.length = 3;
   }
 
   // 3人に満たない場合は補完
   while (reincarnations.length < 3) {
     reincarnations.push({
-      name: `歴史上の人物${reincarnations.length + 1}`,
-      years: "生没年不詳",
+      name: `解析中の人物${reincarnations.length + 1}`,
+      years: "年代解析中",
       reasons: [
-        "**特性1**：詳細が十分に解析できませんでした",
-        "**特性2**：詳細が十分に解析できませんでした",
-        "**特性3**：詳細が十分に解析できませんでした",
-        "**特性4**：詳細が十分に解析できませんでした"
+        "解析中の特性1",
+        "解析中の特性2",
+        "解析中の特性3",
+        "解析中の特性4"
       ],
-      conclusion: "→ **「結論」**はデータ不足のため提供できません"
+      conclusion: "解析中の結論"
     });
   }
 
-  return reincarnations.slice(0, 3);
+  return reincarnations;
 }
