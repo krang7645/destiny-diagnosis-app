@@ -290,9 +290,8 @@ ${destinyData}
       const content = await callOpenAIWithRetry(openai, messages);
       console.log("OpenAI API call completed successfully");
 
-      let response;
       if (stage === 'destiny' || !stage) {
-        response = {
+        return {
           statusCode: 200,
           headers,
           body: JSON.stringify({
@@ -302,7 +301,7 @@ ${destinyData}
         };
       } else if (stage === 'pastlife' || stage === 'pastlife1') {
         const result = extractReincarnations(content);
-        response = {
+        return {
           statusCode: 200,
           headers,
           body: JSON.stringify({
@@ -313,7 +312,7 @@ ${destinyData}
         };
       } else if (stage === 'pastlife2') {
         const result = extractReincarnations(content);
-        response = {
+        return {
           statusCode: 200,
           headers,
           body: JSON.stringify({
@@ -324,7 +323,7 @@ ${destinyData}
         };
       } else if (stage === 'pastlife3') {
         const result = extractReincarnations(content);
-        response = {
+        return {
           statusCode: 200,
           headers,
           body: JSON.stringify({
@@ -334,7 +333,6 @@ ${destinyData}
           }),
         };
       }
-      return response;
     } catch (error) {
       console.error("Error calling OpenAI API:", error);
       let errorMessage = error.message;
