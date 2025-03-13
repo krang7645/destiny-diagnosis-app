@@ -279,12 +279,18 @@ function extractReincarnations(content) {
     console.log('Raw content:', fullText); // デバッグ用
 
     // 候補を抽出（「候補X：」で分割）
-    const sections = fullText.split(/(?=候補[1-3]：)/).filter(Boolean);
-    console.log(`Found ${sections.length} sections`); // デバッグ用
+    const sections = fullText
+      .split(/(?=候補[1-3]：)/)
+      .filter(section =>
+        section.trim() &&
+        section.includes('候補') &&
+        section.includes('：')
+      );
+    console.log(`Found ${sections.length} valid sections`); // デバッグ用
 
     // セクションが3つない場合は処理中とみなす
     if (sections.length < 3) {
-      console.log('Not enough sections found, returning processing status');
+      console.log('Not enough valid sections found, returning processing status');
       return {
         status: 'processing',
         message: '前世の解析を続けています...'
@@ -292,22 +298,22 @@ function extractReincarnations(content) {
     }
 
     const reincarnations = [];
-    const expectedCandidates = 3;
     let isProcessing = false;
 
     // 各セクションから情報を抽出
-    for (let i = 0; i < sections.length && i < expectedCandidates; i++) {
-      const section = sections[i];
+    for (let i = 0; i < sections.length; i++) {
+      const section = sections[i].trim();
       console.log(`\nProcessing section ${i + 1}:`, section); // デバッグ用
 
       try {
         // 名前と年代を抽出（より柔軟なパターンマッチング）
-        const nameMatch = section.match(/候補\d+：([^（\n]*[^（\s])[\s]*（([^）]+)）/);
+        const nameMatch = section.match(/候補[1-3]：([^（\n]*[^（\s])[\s]*（([^）]+)）/);
         const name = nameMatch ? nameMatch[1]?.trim() : null;
         const years = nameMatch ? nameMatch[2]?.trim() : null;
 
         // 必須データが欠けている場合は処理中とみなす
         if (!name || !years) {
+          console.log(`Missing required data in section ${i + 1}`);
           isProcessing = true;
           continue;
         }
@@ -347,6 +353,7 @@ function extractReincarnations(content) {
 
         // 理由が3つない場合は処理中とみなす
         if (reasons.length < 3) {
+          console.log(`Not enough reasons in section ${i + 1}: ${reasons.length} found`);
           isProcessing = true;
         }
 
@@ -372,6 +379,7 @@ function extractReincarnations(content) {
 
         // 結論がない場合は処理中とみなす
         if (!conclusion) {
+          console.log(`No conclusion found in section ${i + 1}`);
           isProcessing = true;
         }
 
@@ -399,6 +407,11 @@ function extractReincarnations(content) {
 
     // 必要な情報が揃っていない場合は処理中を返す
     if (isProcessing || reincarnations.length < 3 || !finalConclusion) {
+      console.log('Missing required data:', {
+        isProcessing,
+        reincarnationsLength: reincarnations.length,
+        hasFinalConclusion: !!finalConclusion
+      });
       return {
         status: 'processing',
         message: '前世の解析を続けています...'
