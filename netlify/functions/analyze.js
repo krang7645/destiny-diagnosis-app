@@ -176,7 +176,8 @@ MBTI: ${mbti}
 ${destinyData}
 
 上記の天命分析に基づいて、この人物の「前世」として考えられる歴史上の人物を3名診断してください。
-以下のフォーマットで、各候補者について詳しく解説してください：
+以下のフォーマットで、各候補者について詳しく解説してください。
+必ず3名の候補者を挙げてください。2名や1名では不十分です：
 
 候補1：[職業・役割]・[人物名]（[生没年]）
 
@@ -193,6 +194,10 @@ ${destinyData}
 
 候補2：[以下同様のフォーマット]
 
+⸻
+
+候補3：[以下同様のフォーマット]
+
 このように、各候補者について：
 1. 職業や役割を含めた完全な名前と生没年
 2. その人物の有名な言葉や名言（ある場合）
@@ -203,6 +208,7 @@ ${destinyData}
 結論は「結論：」で始まり、改行を入れて詳しく説明してください。
 
 回答は必ず上記のフォーマットに従い、各セクションを⸻（ダッシュ3つ）で区切ってください。
+必ず3名の候補者を挙げ、それぞれの情報を詳しく記載してください。
 `;
     }
 
@@ -265,7 +271,7 @@ ${destinyData}
   }
 };
 
-// 前世データから人物情報を抽出する関数
+// 前世データから人物情報を抽出する関数を修正
 function extractReincarnations(content) {
   // 全体のテキストを取得
   const fullText = content.trim();
@@ -274,17 +280,16 @@ function extractReincarnations(content) {
   const sections = fullText.split(/候補\d+：/).filter(Boolean);
 
   const reincarnations = [];
+  const expectedCandidates = 3;
 
   // 各セクションから情報を抽出
-  for (let i = 0; i < sections.length && i < 3; i++) {
+  for (let i = 0; i < sections.length && i < expectedCandidates; i++) {
     const section = sections[i];
 
     // 名前と年代を抽出
     const nameMatch = section.match(/([^（\n]+)（([^）]+)）/);
-    if (!nameMatch) continue;
-
-    const name = nameMatch[1]?.trim();
-    const years = nameMatch[2]?.trim();
+    const name = nameMatch ? nameMatch[1]?.trim() : `分析中の歴史上の人物${i + 1}`;
+    const years = nameMatch ? nameMatch[2]?.trim() : "生没年を分析中";
 
     // 名言を抽出
     let quote = '';
@@ -295,7 +300,7 @@ function extractReincarnations(content) {
 
     // 特徴（理由）を抽出
     const reasons = [];
-    const reasonsSection = section.split('▶︎')[0]; // 「▶︎」より前の部分を理由セクションとして扱う
+    const reasonsSection = section.split('▶︎')[0];
     const lines = reasonsSection.split('\n');
     for (const line of lines) {
       const trimmedLine = line.trim();
@@ -305,7 +310,7 @@ function extractReincarnations(content) {
       }
     }
 
-    // 結論を抽出（「▶︎ 生まれ変わり説アリ」の後の部分）
+    // 結論を抽出
     let conclusion = '';
     const conclusionSection = section.split('▶︎')[1];
     if (conclusionSection) {
@@ -319,26 +324,18 @@ function extractReincarnations(content) {
       }
     }
 
-    if (name && years) {
-      reincarnations.push({
-        name,
-        years,
-        quote: quote || null,
-        reasons: reasons.length > 0 ? reasons : ['この歴史上の人物の特徴を分析しています'],
-        conclusion: conclusion || '現代での活躍の可能性を分析しています'
-      });
-    }
-  }
-
-  // 最終的な結論を抽出
-  let finalConclusion = '';
-  const finalConclusionMatch = content.match(/結論：\s*\n+([\s\S]+?)(?:\n\s*$|$)/);
-  if (finalConclusionMatch) {
-    finalConclusion = finalConclusionMatch[1].trim();
+    // 候補者情報を追加
+    reincarnations.push({
+      name,
+      years,
+      quote: quote || "名言を分析中",
+      reasons: reasons.length > 0 ? reasons : ['この歴史上の人物の特徴を分析しています'],
+      conclusion: conclusion || '現代での活躍の可能性を分析しています'
+    });
   }
 
   // 3人に満たない場合は補完
-  while (reincarnations.length < 3) {
+  while (reincarnations.length < expectedCandidates) {
     const index = reincarnations.length + 1;
     reincarnations.push({
       name: `分析中の歴史上の人物${index}`,
@@ -347,6 +344,13 @@ function extractReincarnations(content) {
       reasons: ["この歴史上の人物の特徴を分析しています"],
       conclusion: "現代での活躍の可能性を分析しています"
     });
+  }
+
+  // 最終的な結論を抽出
+  let finalConclusion = '';
+  const finalConclusionMatch = content.match(/結論：\s*\n+([\s\S]+?)(?:\n\s*$|$)/);
+  if (finalConclusionMatch) {
+    finalConclusion = finalConclusionMatch[1].trim();
   }
 
   return {
