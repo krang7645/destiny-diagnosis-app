@@ -324,8 +324,8 @@ function extractReincarnations(content) {
         name,
         years,
         quote: quote || null,
-        reasons: reasons.length > 0 ? reasons : ['前世の特徴を分析中です'],
-        conclusion: conclusion || 'もし魂が現代に転生していたら、その才能を活かして新しい分野で活躍するでしょう。'
+        reasons: reasons.length > 0 ? reasons : ['この歴史上の人物の特徴を分析しています'],
+        conclusion: conclusion || '現代での活躍の可能性を分析しています'
       });
     }
   }
@@ -339,16 +339,13 @@ function extractReincarnations(content) {
 
   // 3人に満たない場合は補完
   while (reincarnations.length < 3) {
+    const index = reincarnations.length + 1;
     reincarnations.push({
-      name: `偉大な歴史上の人物`,
-      years: "詳細を分析中",
-      quote: "「人生における重要な教訓や知恵の言葉」",
-      reasons: [
-        "その時代において重要な功績を残した人物",
-        "現代にも通じる普遍的な価値観を持っていた",
-        "あなたと共通する特徴や才能の持ち主"
-      ],
-      conclusion: "現代に転生した場合、革新的なアイデアと強い信念で新しい価値を創造する人物として活躍するでしょう"
+      name: `分析中の歴史上の人物${index}`,
+      years: "生没年を分析中",
+      quote: "名言を分析中",
+      reasons: ["この歴史上の人物の特徴を分析しています"],
+      conclusion: "現代での活躍の可能性を分析しています"
     });
   }
 
