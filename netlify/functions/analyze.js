@@ -1,6 +1,8 @@
 const { Configuration, OpenAIApi } = require("openai");
 
 exports.handler = async function(event, context) {
+  console.log("Function started - Request received");
+
   // CORSヘッダーの設定
   const headers = {
     "Access-Control-Allow-Origin": "*",
@@ -11,6 +13,7 @@ exports.handler = async function(event, context) {
 
   // OPTIONSリクエスト対応
   if (event.httpMethod === "OPTIONS") {
+    console.log("OPTIONS request handled");
     return {
       statusCode: 200,
       headers,
@@ -20,6 +23,7 @@ exports.handler = async function(event, context) {
 
   // POSTリクエスト以外は拒否
   if (event.httpMethod !== "POST") {
+    console.log(`Invalid HTTP method: ${event.httpMethod}`);
     return {
       statusCode: 405,
       headers,
@@ -28,12 +32,15 @@ exports.handler = async function(event, context) {
   }
 
   try {
+    console.log("Parsing request body");
     // リクエストボディからデータを取得
     const data = JSON.parse(event.body);
     const { name, birthdate, mbti, stage } = data;
+    console.log(`Received data - Name: ${name}, Birthdate: ${birthdate}, MBTI: ${mbti}, Stage: ${stage}`);
 
     // バリデーション
     if (!name || !birthdate || !mbti) {
+      console.log("Validation failed - Missing required parameters");
       return {
         statusCode: 400,
         headers,
@@ -42,11 +49,13 @@ exports.handler = async function(event, context) {
     }
 
     // OpenAI API設定
+    console.log("Configuring OpenAI API");
     const configuration = new Configuration({
       apiKey: process.env.OPENAI_API_KEY,
     });
 
     if (!process.env.OPENAI_API_KEY) {
+      console.log("OpenAI API key not found");
       return {
         statusCode: 500,
         headers,
@@ -55,10 +64,12 @@ exports.handler = async function(event, context) {
     }
 
     const openai = new OpenAIApi(configuration);
+    console.log("OpenAI API configured successfully");
 
     // ステージに応じたプロンプト生成
     let prompt = '';
     if (stage === 'destiny' || !stage) {
+      console.log("Generating destiny prompt");
       // 第一段階: 天命診断
       prompt = `
 名前: ${name}
@@ -79,6 +90,7 @@ MBTI: ${mbti}
 小松竜之介（1990年07月31日、ESFP）の例に似た詳細さとフォーマットで回答してください。
 `;
     } else if (stage === 'pastlife') {
+      console.log("Generating pastlife prompt");
       // 第二段階: 前世診断（天命データを含める）
       const destinyData = data.destinyData || '';
       prompt = `
@@ -104,57 +116,94 @@ ${destinyData}
 
     // OpenAI API呼び出しを非同期で行う
     const getOpenAIResponse = async () => {
-      const response = await openai.createChatCompletion({
-        model: "gpt-3.5-turbo",
-        messages: [
-          { role: "system", content: "あなたは占い師です。依頼者の運命を詳細に診断します。" },
-          { role: "user", content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 1000
-      });
-      return response.data.choices[0].message.content;
+      console.log("Starting OpenAI API call");
+      try {
+        const response = await openai.createChatCompletion({
+          model: "gpt-3.5-turbo",
+          messages: [
+            { role: "system", content: "あなたは占い師です。依頼者の運命を詳細に診断します。" },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 1000
+        });
+        console.log("OpenAI API call completed successfully");
+        return response.data.choices[0].message.content;
+      } catch (error) {
+        console.error("OpenAI API call failed:", error);
+        throw error;
+      }
     };
 
     // 非同期処理の開始
-    const content = await getOpenAIResponse();
-    // 結果ID
-    const resultId = Date.now().toString();
+    console.log("Starting async processing");
+    getOpenAIResponse()
+      .then(content => {
+        console.log("Processing OpenAI response");
+        // 結果ID
+        const resultId = Date.now().toString();
 
-    // ステージに応じた結果を返す
-    if (stage === 'destiny' || !stage) {
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({
-          stage: 'destiny',
-          result: content,
-          resultId
-        }),
-      };
-    } else if (stage === 'pastlife') {
-      // 前世データを解析して構造化
-      const reincarnations = extractReincarnations(content);
+        // ステージに応じた結果を返す
+        if (stage === 'destiny' || !stage) {
+          console.log("Returning destiny analysis result");
+          return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({
+              stage: 'destiny',
+              result: content,
+              resultId
+            }),
+          };
+        } else if (stage === 'pastlife') {
+          console.log("Processing pastlife analysis");
+          // 前世データを解析して構造化
+          const reincarnations = extractReincarnations(content);
+          console.log("Returning pastlife analysis result");
+          return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({
+              stage: 'pastlife',
+              reincarnations,
+              resultId
+            }),
+          };
+        }
+      })
+      .catch(error => {
+        console.error("Error in async processing:", error);
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({
+            error: "診断処理中にエラーが発生しました",
+            message: error.message,
+            stack: error.stack
+          }),
+        };
+      });
 
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({
-          stage: 'pastlife',
-          reincarnations,
-          resultId
-        }),
-      };
-    }
+    console.log("Returning initial response");
+    // 処理中のメッセージを即座に返す
+    return {
+      statusCode: 202,
+      headers,
+      body: JSON.stringify({
+        message: "診断を処理中です。結果が準備でき次第、通知されます。",
+        status: "processing"
+      }),
+    };
 
   } catch (error) {
-    console.error("エラー:", error);
+    console.error("Unexpected error:", error);
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({
-        error: "診断処理中にエラーが発生しました",
-        message: error.message
+        error: "予期せぬエラーが発生しました",
+        message: error.message,
+        stack: error.stack
       }),
     };
   }
