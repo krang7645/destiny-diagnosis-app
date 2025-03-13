@@ -1,4 +1,5 @@
 const { Configuration, OpenAIApi } = require("openai");
+const axios = require("axios");
 
 // 結果を一時的に保存するためのMap
 const resultStore = new Map();
@@ -11,24 +12,24 @@ const TIMEOUT = 10000; // 10秒
 // OpenAI API呼び出しの関数
 async function callOpenAIWithRetry(openai, messages, retryCount = 0) {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT);
+    const response = await Promise.race([
+      openai.createChatCompletion({
+        model: "gpt-3.5-turbo",
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 1000
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('APIリクエストがタイムアウトしました')), TIMEOUT)
+      )
+    ]);
 
-    const response = await openai.createChatCompletion({
-      model: "gpt-3.5-turbo",
-      messages: messages,
-      temperature: 0.7,
-      max_tokens: 1000,
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
     return response.data.choices[0].message.content;
   } catch (error) {
     console.error(`API call attempt ${retryCount + 1} failed:`, error.message);
-
-    if (error.name === 'AbortError') {
-      throw new Error('APIリクエストがタイムアウトしました');
+    if (error.response) {
+      console.error('Error response data:', error.response.data);
+      console.error('Error response status:', error.response.status);
     }
 
     if (retryCount < MAX_RETRIES) {
@@ -219,12 +220,16 @@ ${destinyData}
       }
     } catch (error) {
       console.error("Error calling OpenAI API:", error);
+      let errorMessage = error.message;
+      if (error.response && error.response.data && error.response.data.error) {
+        errorMessage = `${error.message} - ${error.response.data.error.message || '詳細不明'}`;
+      }
       return {
         statusCode: 500,
         headers,
         body: JSON.stringify({
           error: "OpenAI APIの呼び出し中にエラーが発生しました",
-          message: error.message
+          message: errorMessage
         }),
       };
     }
