@@ -6,20 +6,30 @@ const resultStore = new Map();
 // リトライ設定
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1秒
+const TIMEOUT = 10000; // 10秒
 
 // OpenAI API呼び出しの関数
 async function callOpenAIWithRetry(openai, messages, retryCount = 0) {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT);
+
     const response = await openai.createChatCompletion({
       model: "gpt-3.5-turbo",
       messages: messages,
       temperature: 0.7,
       max_tokens: 1000,
-      timeout: 30000, // 30秒のタイムアウト
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
     return response.data.choices[0].message.content;
   } catch (error) {
     console.error(`API call attempt ${retryCount + 1} failed:`, error.message);
+
+    if (error.name === 'AbortError') {
+      throw new Error('APIリクエストがタイムアウトしました');
+    }
 
     if (retryCount < MAX_RETRIES) {
       console.log(`Retrying in ${RETRY_DELAY}ms...`);
@@ -130,20 +140,11 @@ exports.handler = async function(event, context) {
     const openai = new OpenAIApi(configuration);
     console.log("OpenAI API configured successfully");
 
-    // 結果IDを生成
-    const resultId = Date.now().toString();
-
-    // 初期状態を保存
-    resultStore.set(resultId, { status: "processing" });
-
-    // プロンプト生成とAPI呼び出しを非同期で実行
-    (async () => {
-      try {
-        let prompt = '';
-        if (stage === 'destiny' || !stage) {
-          console.log("Generating destiny prompt");
-          // 第一段階: 天命診断
-          prompt = `
+    let prompt = '';
+    if (stage === 'destiny' || !stage) {
+      console.log("Generating destiny prompt");
+      // 第一段階: 天命診断
+      prompt = `
 名前: ${name}
 生年月日: ${birthdate}
 MBTI: ${mbti}
@@ -161,11 +162,11 @@ MBTI: ${mbti}
 
 小松竜之介（1990年07月31日、ESFP）の例に似た詳細さとフォーマットで回答してください。
 `;
-        } else if (stage === 'pastlife') {
-          console.log("Generating pastlife prompt");
-          // 第二段階: 前世診断（天命データを含める）
-          const destinyData = data.destinyData || '';
-          prompt = `
+    } else if (stage === 'pastlife') {
+      console.log("Generating pastlife prompt");
+      // 第二段階: 前世診断（天命データを含める）
+      const destinyData = data.destinyData || '';
+      prompt = `
 名前: ${name}
 生年月日: ${birthdate}
 MBTI: ${mbti}
@@ -184,52 +185,49 @@ ${destinyData}
 
 チャールズ・チャップリン、宮本武蔵、ピーター大帝の例のような詳細さとフォーマットで回答してください。
 `;
-        }
+    }
 
-        console.log("Starting OpenAI API call with retry mechanism");
-        const messages = [
-          { role: "system", content: "あなたは占い師です。依頼者の運命を詳細に診断します。" },
-          { role: "user", content: prompt }
-        ];
+    console.log("Starting OpenAI API call with retry mechanism");
+    const messages = [
+      { role: "system", content: "あなたは占い師です。依頼者の運命を詳細に診断します。" },
+      { role: "user", content: prompt }
+    ];
 
-        const content = await callOpenAIWithRetry(openai, messages);
-        console.log("OpenAI API call completed successfully");
+    try {
+      const content = await callOpenAIWithRetry(openai, messages);
+      console.log("OpenAI API call completed successfully");
 
-        // 結果を保存
-        if (stage === 'destiny' || !stage) {
-          resultStore.set(resultId, {
-            status: "completed",
+      if (stage === 'destiny' || !stage) {
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
             stage: 'destiny',
             result: content
-          });
-        } else if (stage === 'pastlife') {
-          const reincarnations = extractReincarnations(content);
-          resultStore.set(resultId, {
-            status: "completed",
+          }),
+        };
+      } else if (stage === 'pastlife') {
+        const reincarnations = extractReincarnations(content);
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
             stage: 'pastlife',
             reincarnations
-          });
-        }
-      } catch (error) {
-        console.error("Error in async processing after retries:", error);
-        resultStore.set(resultId, {
-          status: "error",
-          error: "診断処理中にエラーが発生しました",
-          message: `${error.message} (リトライ後も失敗)`
-        });
+          }),
+        };
       }
-    })();
-
-    // 即座に結果IDを返す
-    return {
-      statusCode: 202,
-      headers,
-      body: JSON.stringify({
-        resultId,
-        status: "processing",
-        message: "診断を処理中です。結果が準備でき次第、通知されます。"
-      }),
-    };
+    } catch (error) {
+      console.error("Error calling OpenAI API:", error);
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({
+          error: "OpenAI APIの呼び出し中にエラーが発生しました",
+          message: error.message
+        }),
+      };
+    }
 
   } catch (error) {
     console.error("Unexpected error:", error);
