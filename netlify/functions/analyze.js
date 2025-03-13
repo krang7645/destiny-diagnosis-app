@@ -3,6 +3,33 @@ const { Configuration, OpenAIApi } = require("openai");
 // 結果を一時的に保存するためのMap
 const resultStore = new Map();
 
+// リトライ設定
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1秒
+
+// OpenAI API呼び出しの関数
+async function callOpenAIWithRetry(openai, messages, retryCount = 0) {
+  try {
+    const response = await openai.createChatCompletion({
+      model: "gpt-3.5-turbo",
+      messages: messages,
+      temperature: 0.7,
+      max_tokens: 1000,
+      timeout: 30000, // 30秒のタイムアウト
+    });
+    return response.data.choices[0].message.content;
+  } catch (error) {
+    console.error(`API call attempt ${retryCount + 1} failed:`, error.message);
+
+    if (retryCount < MAX_RETRIES) {
+      console.log(`Retrying in ${RETRY_DELAY}ms...`);
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+      return callOpenAIWithRetry(openai, messages, retryCount + 1);
+    }
+    throw error;
+  }
+}
+
 exports.handler = async function(event, context) {
   console.log("Function started - Request received");
 
@@ -159,18 +186,13 @@ ${destinyData}
 `;
         }
 
-        console.log("Starting OpenAI API call");
-        const response = await openai.createChatCompletion({
-          model: "gpt-3.5-turbo",
-          messages: [
-            { role: "system", content: "あなたは占い師です。依頼者の運命を詳細に診断します。" },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.7,
-          max_tokens: 1000
-        });
+        console.log("Starting OpenAI API call with retry mechanism");
+        const messages = [
+          { role: "system", content: "あなたは占い師です。依頼者の運命を詳細に診断します。" },
+          { role: "user", content: prompt }
+        ];
 
-        const content = response.data.choices[0].message.content;
+        const content = await callOpenAIWithRetry(openai, messages);
         console.log("OpenAI API call completed successfully");
 
         // 結果を保存
@@ -189,11 +211,11 @@ ${destinyData}
           });
         }
       } catch (error) {
-        console.error("Error in async processing:", error);
+        console.error("Error in async processing after retries:", error);
         resultStore.set(resultId, {
           status: "error",
           error: "診断処理中にエラーが発生しました",
-          message: error.message
+          message: `${error.message} (リトライ後も失敗)`
         });
       }
     })();
