@@ -18,8 +18,7 @@ async function callOpenAIWithRetry(openai, messages, retryCount = 0) {
         model: "gpt-3.5-turbo",
         messages: messages,
         temperature: 0.7,
-        max_tokens: 2000,
-        timeout: TIMEOUT // タイムアウト設定を追加
+        max_tokens: 2000
       }),
       new Promise((_, reject) =>
         setTimeout(() => reject(new Error(`APIリクエストが${TIMEOUT/1000}秒でタイムアウトしました`)), TIMEOUT)
@@ -31,10 +30,11 @@ async function callOpenAIWithRetry(openai, messages, retryCount = 0) {
   } catch (error) {
     console.error(`API call attempt ${retryCount + 1} failed:`, error.message);
     if (error.response) {
-      console.error('Error response data:', error.response.data);
+      console.error('Error response data:', JSON.stringify(error.response.data, null, 2));
       console.error('Error response status:', error.response.status);
     }
 
+    // タイムアウトエラーまたはその他のエラーの場合、リトライを試みる
     if (retryCount < MAX_RETRIES) {
       const nextRetryDelay = RETRY_DELAY * (retryCount + 1); // 指数バックオフ
       console.log(`Retrying in ${nextRetryDelay}ms... (Attempt ${retryCount + 2}/${MAX_RETRIES + 1})`);
