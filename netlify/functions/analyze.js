@@ -309,26 +309,45 @@ function extractReincarnations(content) {
         .filter(line => line.trim().startsWith('→'))
         .map(line => line.trim().replace(/^→\s*/, ''));
 
-      // 結論を抽出
+      // 結論を抽出（転生予想）
       let conclusion = '';
       const conclusionPart = section.split('▶︎')[1];
       if (conclusionPart) {
-        const arrowMatch = conclusionPart.match(/→\s*([^\n]+)/);
-        if (arrowMatch) {
-          conclusion = arrowMatch[1].trim();
+        const lines = conclusionPart
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line => line.startsWith('→'));
+        if (lines.length > 0) {
+          conclusion = lines[0].replace(/^→\s*/, '');
         }
       }
 
-      // 最終結論を抽出
+      // 最終結論を抽出（改善版）
       let finalConclusion = '';
-      const finalConclusionMatch = content.match(/結論：\s*([^\n]+)/);
+      const finalConclusionMatch = content.match(/結論：([\s\S]+?)(?=$)/);
       if (finalConclusionMatch) {
         finalConclusion = finalConclusionMatch[1].trim();
       }
 
+      // デバッグログを追加
+      console.log('Extracted data:', {
+        name,
+        years,
+        quote,
+        reasons,
+        conclusion,
+        finalConclusion
+      });
+
       // 必要なデータが揃っているか確認
       if (!name || !years || reasons.length < 3 || !conclusion || !finalConclusion) {
-        console.log('Missing required data');
+        console.log('Missing required data:', {
+          hasName: !!name,
+          hasYears: !!years,
+          reasonCount: reasons.length,
+          hasConclusion: !!conclusion,
+          hasFinalConclusion: !!finalConclusion
+        });
         return {
           status: 'processing',
           message: '前世の解析を続けています...'
